@@ -179,9 +179,9 @@ function bodyPx(fly) {
 function senseRadius(fly) {
   const L = bodyPx(fly);
   const t = clamp(mouse.spd / 3200, 0, 1);
-  const flying = fly.state === 'fly' || fly.state === 'flee';
-  const minB = flying ? 20 : 4;
-  const maxB = 30;
+  const flying = fly.state === 'fly' || fly.state === 'flee' || swatterOn || ragOn;
+  const minB = flying ? 22 : 8;
+  const maxB = 34;
   return L * (minB + (maxB - minB) * t);
 }
 
@@ -756,7 +756,6 @@ function threat(fly, now) {
   const { dist } = mouseRel(fly);
   if (fly.state === 'flee') return { p: 0, intensity: 0, dist };
   if (now < (fly.settleUntil || 0)) return { p: 0, intensity: 0, dist };
-  if (fly.mateSeek && dist > 40) return { p: 0, intensity: 0, dist };
   const r = senseRadius(fly);
   if (dist > r) return { p: 0, intensity: 0, dist };
   const intensity = clamp(1 - dist / r, 0.4, 1);
@@ -986,7 +985,8 @@ function stepFly(fly, dt, now) {
 
   if (fly.state === 'mate') {
     const p = dangerPos();
-    if (Math.hypot(fly.x - p.x, fly.y - p.y) < 140) {
+    const d = Math.hypot(fly.x - p.x, fly.y - p.y);
+    if (d < Math.max(180, senseRadius(fly))) {
       failMate(fly, now);
       return;
     }
@@ -1433,7 +1433,7 @@ function closePairs(now) {
   for (const f of flies) {
     if (!f.mateSeek || f.state === 'dead' || f.state === 'mate') continue;
     const p = flies.find((x) => x.id === f.mateSeek);
-    if (!p || p.state === 'dead' || p.state === 'mate') continue;
+    if (!p || p.state === 'dead' || p.state === 'mate' || p.state === 'flee' || f.state === 'flee') continue;
     const ic = f.target;
     if (ic) {
       const c = iconPad(ic);
@@ -1948,7 +1948,7 @@ function inPaddle(px, py) {
   const iy = PADDLE_CY + (py - mouse.y) / (scale * sy);
   const dx = (ix - PADDLE_CX) / PADDLE_RX;
   const dy = (iy - PADDLE_CY) / PADDLE_RY;
-  return dx * dx + dy * dy <= 1;
+  return dx * dx + dy * dy <= 0.42;
 }
 
 function clampHandle() {
@@ -2857,6 +2857,11 @@ requestAnimationFrame(frame);
 
 function trackTool(x, y) {
   if (!swatterOn && !ragOn) return;
+  const dx = x - mouse.x;
+  const dy = y - mouse.y;
+  mouse.vx = dx * 60;
+  mouse.vy = dy * 60;
+  mouse.spd = Math.hypot(mouse.vx, mouse.vy);
   mouse.x = x;
   mouse.y = y;
   if (swatterOn) clampHandle();
