@@ -11,6 +11,7 @@ import { listDesktopIconsGrid, fetchLiveIcons } from './src/icons.js';
 import { fetchIconRects } from './src/icon-rects.js';
 import { startRawMouse, stopRawMouse } from './src/raw-mouse.js';
 import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs } from './src/desktop-layer.js';
+import { createTrayController } from './src/tray.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(HERE, 'assets', 'tray.png');
@@ -38,6 +39,7 @@ let autoStart = isAnnoy;
 
 let overlay = null;
 let panel = null;
+let trayController = null;
 let swatterOn = false;
 let ragOn = false;
 let paused = false;
@@ -65,11 +67,20 @@ function send(channel, payload) {
 }
 
 function publishState() {
+  const state = {
+    swatterOn, ragOn, paused, fast, watch, breed, gate, autoStart, annoy: isAnnoy,
+  };
   if (panel && !panel.isDestroyed()) {
-    panel.webContents.send('state', {
-      swatterOn, ragOn, paused, fast, watch, breed, gate, autoStart, annoy: isAnnoy,
-    });
+    panel.webContents.send('state', state);
   }
+  trayController?.update(state);
+}
+
+function showPanel() {
+  if (!panel || panel.isDestroyed()) return;
+  if (panel.isMinimized()) panel.restore();
+  panel.show();
+  panel.focus();
 }
 
 function raisePanelOverOverlay() {
@@ -259,12 +270,18 @@ function createPanel() {
   });
   win.setMenu(null);
   win.loadFile(path.join(HERE, 'renderer', 'panel.html'));
-  win.on('close', () => {
-    app.isQuitting = true;
+  win.on('minimize', (e) => {
+    if (app.isQuitting) return;
+    e.preventDefault();
+    win.hide();
+  });
+  win.on('close', (e) => {
+    if (app.isQuitting) return;
+    e.preventDefault();
+    win.hide();
   });
   win.on('closed', () => {
     panel = null;
-    quitApp();
   });
   win.webContents.on('did-finish-load', publishState);
   return win;
@@ -489,6 +506,58 @@ function refitDesktop() {
   publishGeometry();
 }
 
+function handleAction(msg) {
+  const name = typeof msg === 'string' ? msg : msg?.name;
+  if (name === 'swatter') {
+    swatterOn = !swatterOn;
+    if (swatterOn) ragOn = false;
+    applyTool();
+  } else if (name === 'rag') {
+    ragOn = !ragOn;
+    if (ragOn) swatterOn = false;
+    applyTool();
+  } else if (name === 'swatter-off') {
+    putAwaySwatter();
+  } else if (name === 'addFly') {
+    send('cmd', { name: 'addFly', morph: msg.morph, sex: msg.sex });
+  } else if (name === 'scareAll') {
+    send('cmd', { name: 'scareAll' });
+  } else if (name === 'pause') {
+    paused = !paused;
+    send('cmd', { name: 'pause', value: paused });
+    publishState();
+  } else if (name === 'fast') {
+    fast = !fast;
+    send('cmd', { name: 'fast', value: fast });
+    publishState();
+  } else if (name === 'xray') {
+    watch = !watch;
+    applyLayer();
+    publishState();
+  } else if (name === 'autostart') {
+    autoStart = !autoStart;
+    applyAutoStart();
+    saveSettings();
+    publishState();
+  } else if (name === 'resume') {
+    if (isAnnoy) return;
+    gate = false;
+    breed = true;
+    if (savedRun) send('cmd', { name: 'restore', data: savedRun });
+    else send('cmd', { name: 'startFresh' });
+    publishState();
+  } else if (name === 'restart') {
+    if (isAnnoy) return;
+    gate = false;
+    breed = true;
+    clearSave();
+    send('cmd', { name: 'startFresh' });
+    publishState();
+  } else if (name === 'quit') {
+    quitApp();
+  }
+}
+
 app.commandLine.appendSwitch('enable-transparent-visuals');
 app.setAppUserModelId(isAnnoy ? 'com.desktopfly.welfare' : 'com.desktopfly.pet');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
@@ -497,10 +566,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (!panel || panel.isDestroyed()) return;
-    if (panel.isMinimized()) panel.restore();
-    panel.show();
-    panel.focus();
+    showPanel();
   });
 
   app.whenReady().then(() => {
@@ -531,6 +597,11 @@ if (!app.requestSingleInstanceLock()) {
     overlay.on('move', publishGeometry);
 
     panel = createPanel();
+    trayController = createTrayController({
+      icon: ICON,
+      onShow: showPanel,
+      onAction: handleAction,
+    });
     panel.once('ready-to-show', () => panel.show());
     panel.show();
     iconsLiveAt = Date.now() + 2500;
@@ -585,55 +656,7 @@ if (!app.requestSingleInstanceLock()) {
     });
 
     ipcMain.on('panel', (_e, msg) => {
-      const name = msg?.name;
-      if (name === 'swatter') {
-        swatterOn = !swatterOn;
-        if (swatterOn) ragOn = false;
-        applyTool();
-      } else if (name === 'rag') {
-        ragOn = !ragOn;
-        if (ragOn) swatterOn = false;
-        applyTool();
-      } else if (name === 'swatter-off') {
-        putAwaySwatter();
-      } else if (name === 'addFly') {
-        send('cmd', { name: 'addFly', morph: msg.morph, sex: msg.sex });
-      } else if (name === 'scareAll') {
-        send('cmd', { name: 'scareAll' });
-      } else if (name === 'pause') {
-        paused = !paused;
-        send('cmd', { name: 'pause', value: paused });
-        publishState();
-      } else if (name === 'fast') {
-        fast = !fast;
-        send('cmd', { name: 'fast', value: fast });
-        publishState();
-      } else if (name === 'xray') {
-        watch = !watch;
-        applyLayer();
-        publishState();
-      } else if (name === 'autostart') {
-        autoStart = !autoStart;
-        applyAutoStart();
-        saveSettings();
-        publishState();
-      } else if (name === 'resume') {
-        if (isAnnoy) return;
-        gate = false;
-        breed = true;
-        if (savedRun) send('cmd', { name: 'restore', data: savedRun });
-        else send('cmd', { name: 'startFresh' });
-        publishState();
-      } else if (name === 'restart') {
-        if (isAnnoy) return;
-        gate = false;
-        breed = true;
-        clearSave();
-        send('cmd', { name: 'startFresh' });
-        publishState();
-      } else if (name === 'quit') {
-        quitApp();
-      }
+      handleAction(msg);
     });
 
     screen.on('display-removed', refitDesktop);
@@ -647,6 +670,8 @@ app.on('window-all-closed', () => {
 });
 app.on('before-quit', () => {
   app.isQuitting = true;
+  trayController?.destroy();
+  trayController = null;
   if (overlay && !overlay.isDestroyed()) stopRawMouse(overlay);
   globalShortcut.unregisterAll();
   clearInterval(mouseTimer);
