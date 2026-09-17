@@ -2660,12 +2660,12 @@ function draw(now) {
     ctx.fillStyle = 'rgba(0,0,0,0.02)';
     ctx.fillRect(0, 0, W, H);
   }
+  punchIcons();
   for (const f of foods) drawFood(f);
   for (const e of eggs) drawEgg(e);
   for (const p of pupae) drawPupa(p, now, false);
   for (const L of larvae) drawLarva(L);
   for (const s of shells) drawPupa(s, now, true);
-  punchIcons();
   for (const s of splats) drawSplat(s);
   for (const c of corpses) drawCorpse(c);
   for (const f of flies) drawFly(f, now);
