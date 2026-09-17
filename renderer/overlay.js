@@ -2972,10 +2972,9 @@ if (api) {
     if (d.name === 'addFly') {
       const opts = { morph: d.morph, sex: d.sex };
       if (!d.morph) {
-        const one = () => (Math.random() < 0.5 ? 2 : (Math.random() < 0.5 ? 0 : 1));
-        opts.geneD = one();
-        opts.geneP = one();
-        opts.geneG = one();
+        opts.geneD = 1;
+        opts.geneP = 1;
+        opts.geneG = 1;
       }
       spawnFromEdge(1, opts);
     }
