@@ -86,8 +86,10 @@ if (api.onLife) {
     lastLife = last;
     const el = $('stats');
     if (!el) return;
-    const rain = last.rainbow ? `　虹 ${last.rainbow}` : '';
-    let line = `卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}<br>成虫 ${last.adults || 0}　褐 ${last.wild || 0}　中 ${last.mid || 0}　深 ${last.deep || 0}　白 ${last.white || 0}　绿 ${last.green || 0}${rain}`;
+    const total = (last.eggs || 0) + (last.l1 || 0) + (last.l2 || 0) + (last.l3 || 0) + (last.pupae || 0) + (last.adults || 0);
+    const rain = last.rainbow ? `　虹 ${last.rainbow} 绿×绿1/16` : '';
+    let line = `共计 ${total}　卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}`;
+    line += `<br>褐 ${last.wild || 0} 9/16　中 ${last.mid || 0} 3/16　深 ${last.deep || 0} 3/16　白 ${last.white || 0} 3/64　绿 ${last.green || 0} 1/64${rain}`;
     if (isAnnoy) line += `　绿峰值 ${last.greenPeak || 0}`;
     if (last.breed) {
       line += `<br>${last.cleared ? '通关' : '计时'} ${fmtMs(last.breedMs)}`;
