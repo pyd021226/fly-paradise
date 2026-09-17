@@ -943,20 +943,30 @@ function startHop(fly, now) {
 }
 
 function wrapScreen(fly) {
-  if (fly.state === 'perch' || fly.state === 'eat') return;
-  if (!screens.length) return;
+  if (fly.state === 'perch' || fly.state === 'eat' || fly.state === 'mate') return;
+  const list = screens.length ? screens : [{ x: 0, y: 0, w: W, h: H }];
   let x0 = Infinity;
+  let y0 = Infinity;
   let x1 = -Infinity;
-  for (const s of screens) {
+  let y1 = -Infinity;
+  for (const s of list) {
     x0 = Math.min(x0, s.x);
+    y0 = Math.min(y0, s.y);
     x1 = Math.max(x1, s.x + s.w);
+    y1 = Math.max(y1, s.y + s.h);
   }
   const vw = x1 - x0;
-  if (fly.x < x0) fly.x += vw;
-  else if (fly.x >= x1) fly.x -= vw;
-  const s = screenOf(fly.x, fly.y) || nearestScreen(fly.x, fly.y);
-  if (fly.y < s.y) fly.y += s.h;
-  else if (fly.y >= s.y + s.h) fly.y -= s.h;
+  const vh = y1 - y0;
+  if (!(vw > 0) || !(vh > 0)) return;
+  if (!Number.isFinite(fly.x) || !Number.isFinite(fly.y)) {
+    fly.x = (x0 + x1) / 2;
+    fly.y = (y0 + y1) / 2;
+    return;
+  }
+  while (fly.x < x0) fly.x += vw;
+  while (fly.x >= x1) fly.x -= vw;
+  while (fly.y < y0) fly.y += vh;
+  while (fly.y >= y1) fly.y -= vh;
 }
 
 function wanderHeading(fly, dt, now, toward) {
