@@ -267,7 +267,7 @@ function foodInRing(x, y, skipId) {
 }
 
 function punchIcons() {
-  if (!icons.length) return;
+  if (watch || !icons.length) return;
   ctx.save();
   ctx.globalCompositeOperation = 'destination-out';
   ctx.fillStyle = '#000';
