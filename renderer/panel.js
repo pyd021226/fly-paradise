@@ -86,8 +86,7 @@ if (api.onLife) {
     lastLife = last;
     const el = $('stats');
     if (!el) return;
-    let line = `<span class="m">共计 ${last.adults || 0}</span>`;
-    line += `卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}`;
+    let line = `成虫 ${last.adults || 0}　卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}`;
     line += `<span class="m">褐色（A_B_C_/A_B_cc） ${last.wild || 0}</span>`;
     line += `<span class="m">中褐（A_bbC_/A_bbcc） ${last.mid || 0}</span>`;
     line += `<span class="m">深褐（aaB_C_/aaB_cc） ${last.deep || 0}</span>`;
