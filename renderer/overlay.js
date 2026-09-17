@@ -1007,16 +1007,22 @@ function stepFly(fly, dt, now) {
   }
 
   if (fly.kidDieAt && !fly.dieAt && now >= fly.kidDieAt) {
-    const ang = rand(0, Math.PI * 2);
-    fly.dieAt = now + 5000;
-    fly.state = 'fly';
-    fly.mission = 'dying';
-    fly.perch = null;
-    fly.target = null;
-    fly.heading = ang;
-    fly.vx = Math.cos(ang) * 380;
-    fly.vy = Math.sin(ang) * 380;
-    fly.takeoffUntil = now + 350;
+    addSplat(fly.x, fly.y, now, fly.seed, 1);
+    corpses.push({
+      x: fly.x,
+      y: fly.y,
+      heading: fly.visHead || fly.heading || 0,
+      seed: fly.seed,
+      scale: fly.scale || 1,
+      sex: fly.sex,
+      geneD: fly.geneD,
+      geneP: fly.geneP,
+      geneG: fly.geneG,
+      geneX: fly.geneX,
+      geneY: fly.geneY,
+    });
+    fly.state = 'dead';
+    return;
   }
 
   if (fly.dieAt) {
