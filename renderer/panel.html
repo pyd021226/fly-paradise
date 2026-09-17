@@ -75,9 +75,28 @@
       border-radius: 10px;
       background: var(--btn);
       font-size: 12px;
-      line-height: 1.55;
+      line-height: 1.65;
       color: var(--ink);
     }
+    .stats .m { display: block; }
+    .add-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .add-row button { margin: 0; }
+    .add-row label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--ink);
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .add-row input { margin: 0; accent-color: var(--ink); }
     .stats b { font-weight: 650; }
     .foot {
       display: flex;
@@ -110,19 +129,17 @@
     </div>
     <h1>果蝇乐园</h1>
     <p class="hint" id="hint">苍蝇在桌面上。点下面拿拍去打，Esc 收起。</p>
-    <div class="stats" id="stats">共计 0　卵 0　蛆 0/0/0　蛹 0<br>褐（A_B_C_/A_B_cc）0　中（A_bbC_/A_bbcc）0　深（aaB_C_/aaB_cc）0　白（aabbC_）0　绿（aabbcc）0</div>
+    <div class="stats" id="stats">共计 0　卵 0　蛆 0/0/0　蛹 0<br><span class="m">褐（A_B_C_/A_B_cc） 0</span><span class="m">中（A_bbC_/A_bbcc） 0</span><span class="m">深（aaB_C_/aaB_cc） 0</span><span class="m">白（aabbC_） 0</span><span class="m">绿（aabbcc） 0</span></div>
     <button id="xray" type="button">全图透视</button>
     <button class="primary" id="swatter" type="button">拿出苍蝇拍</button>
     <button id="rag" type="button">拿出抹布</button>
     <p class="note">按 Esc 退出</p>
-    <div class="row">
-      <button id="sexF" type="button">雌</button>
-      <button id="sexM" type="button" class="on">雄</button>
-    </div>
-    <div class="row">
+    <div class="add-row">
       <button id="add" type="button">加一只</button>
-      <button id="scare" type="button">吓它们</button>
+      <label><input id="sexF" type="checkbox">雌</label>
+      <label><input id="sexM" type="checkbox" checked>雄</label>
     </div>
+    <button id="scare" type="button">吓它们</button>
     <button id="fast" type="button">快进</button>
     <button id="quit" type="button">退出</button>
     <label class="foot"><input id="autoStart" type="checkbox">开机启动</label>

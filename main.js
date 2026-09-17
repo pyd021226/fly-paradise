@@ -239,7 +239,7 @@ function createOverlay(b) {
 function createPanel() {
   const win = new BrowserWindow({
     width: 300,
-    height: 520,
+    height: 640,
     useContentSize: true,
     minWidth: 260,
     minHeight: 320,
