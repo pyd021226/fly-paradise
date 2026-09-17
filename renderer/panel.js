@@ -20,6 +20,7 @@ function render(s) {
   const breed = s.breed !== false;
   const gate = !!s.gate;
   const autoStart = !!s.autoStart;
+  const fast = !!s.fast;
   isAnnoy = !!s.annoy;
   document.body.classList.toggle('gate', gate);
   const btn = $('swatter');
@@ -29,11 +30,15 @@ function render(s) {
   $('rag').classList.toggle('on', rag);
   $('xray').classList.toggle('on', watch);
   $('xray').textContent = watch ? '透视中' : '全图透视';
+  $('fast').classList.toggle('on', fast);
+  $('fast').textContent = fast ? '快进中' : '快进';
   $('autoStart').checked = autoStart;
   if (on) {
     $('hint').textContent = '拍子跟着鼠标。左键打。Esc 还鼠标；点退出或关窗口随时能关。';
   } else if (rag) {
     $('hint').textContent = '抹布跟着鼠标。按住拖动能擦掉汁和空蛹壳。Esc 收起。';
+  } else if (fast) {
+    $('hint').textContent = '快进：成熟、进食、交配、卵、蛹大约 1.5 秒。';
   } else if (watch) {
     $('hint').textContent = '全图透视：果蝇盖在所有窗口上面。再点关掉。';
   } else if (lastLife.cleared && breed) {
@@ -63,6 +68,7 @@ $('sexM').onclick = () => setSex('m');
 $('sexF').onclick = () => setSex('f');
 $('add').onclick = () => api.send('addFly', { sex });
 $('scare').onclick = () => api.send('scareAll');
+$('fast').onclick = () => api.send('fast');
 $('quit').onclick = () => api.send('quit');
 
 addEventListener('keydown', (e) => {
