@@ -2898,14 +2898,14 @@ if (api) {
   api.onAmbient((d) => {
     if (d.grabbing != null) grabbing = !!d.grabbing;
     if (d.mouse) {
-      if (swatterOn || ragOn) return;
-      mouse.x = d.mouse.x;
-      mouse.y = d.mouse.y;
+      if (!(swatterOn || ragOn)) {
+        mouse.x = d.mouse.x;
+        mouse.y = d.mouse.y;
+      }
       if (d.mouse.vx != null) {
         mouse.vx = d.mouse.vx;
         mouse.vy = d.mouse.vy;
-        const s = Math.hypot(mouse.vx, mouse.vy);
-        mouse.spd = s;
+        mouse.spd = Math.hypot(mouse.vx, mouse.vy);
       }
     }
   });

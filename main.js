@@ -433,8 +433,7 @@ let prevCursor = null;
 
 function pollMouse() {
   if (!overlay || overlay.isDestroyed()) return;
-  if (toolOn()) return;
-  if (!cursorOnDesktop(overlay, panel)) {
+  if (!toolOn() && !cursorOnDesktop(overlay, panel)) {
     prevCursor = null;
     send('ambient', { mouse: { x: -9999, y: -9999, vx: 0, vy: 0 }, grabbing: false });
     return;
