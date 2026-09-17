@@ -532,8 +532,8 @@ function spawnFromEdge(n, opts = {}) {
     const sex = opts.sex || (n >= 2 && i === 0 ? 'm' : n >= 2 && i === 1 ? 'f' : undefined);
     const f = spawnFly(x + i * 24, y + i * 10, {
       sex,
-      geneD: genes.geneD,
-      geneP: genes.geneP,
+      geneD: opts.geneD == null ? genes.geneD : opts.geneD,
+      geneP: opts.geneP == null ? genes.geneP : opts.geneP,
       geneG: opts.geneG == null ? genes.geneG : opts.geneG,
       geneX: opts.geneX == null ? genes.geneX : opts.geneX,
       geneY: opts.geneY == null ? genes.geneY : opts.geneY,
@@ -2972,7 +2972,10 @@ if (api) {
     if (d.name === 'addFly') {
       const opts = { morph: d.morph, sex: d.sex };
       if (!d.morph) {
-        opts.geneG = Math.random() < 0.5 ? 2 : (Math.random() < 0.5 ? 0 : 1);
+        const one = () => (Math.random() < 0.5 ? 2 : (Math.random() < 0.5 ? 0 : 1));
+        opts.geneD = one();
+        opts.geneP = one();
+        opts.geneG = one();
       }
       spawnFromEdge(1, opts);
     }

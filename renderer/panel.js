@@ -89,7 +89,7 @@ if (api.onLife) {
     const total = (last.eggs || 0) + (last.l1 || 0) + (last.l2 || 0) + (last.l3 || 0) + (last.pupae || 0) + (last.adults || 0);
     const rain = last.rainbow ? `　虹（aabbccxx） ${last.rainbow}` : '';
     let line = `共计 ${total}　卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}`;
-    line += `<br>褐（ABC/ABcc） ${last.wild || 0}　中（AbbC/Abbcc） ${last.mid || 0}　深（aaBC/aaBcc） ${last.deep || 0}　白（aabbC） ${last.white || 0}　绿（aabbcc） ${last.green || 0}${rain}`;
+    line += `<br>褐（A_B_C_/A_B_cc） ${last.wild || 0}　中（A_bbC_/A_bbcc） ${last.mid || 0}　深（aaB_C_/aaB_cc） ${last.deep || 0}　白（aabbC_） ${last.white || 0}　绿（aabbcc） ${last.green || 0}${rain}`;
     if (isAnnoy) line += `　绿峰值 ${last.greenPeak || 0}`;
     if (last.breed) {
       line += `<br>${last.cleared ? '通关' : '计时'} ${fmtMs(last.breedMs)}`;
