@@ -15,7 +15,7 @@ const smResult = Buffer.alloc(8);
 
 function sendLv(hwnd, msg, wParam, lParam) {
   smResult.fill(0);
-  const r = SendMessageTimeoutW(hwnd, msg, wParam, lParam || 0, SMTO_ABORTIFHUNG, 40, smResult);
+  const r = SendMessageTimeoutW(hwnd, msg, wParam, lParam || 0, SMTO_ABORTIFHUNG, 10, smResult);
   if (!r) return { ok: false, value: 0 };
   return { ok: true, value: Number(smResult.readBigUInt64LE(0)) };
 }
@@ -141,7 +141,7 @@ function readItemName(s, index) {
   }
 }
 
-export function fetchIconRects() {
+export function fetchIconRects({ names = false } = {}) {
   try {
     try { SetThreadDpiAwarenessContext(-4); } catch { /* older Windows */ }
     const s = ensureSess();
@@ -176,7 +176,7 @@ export function fetchIconRects() {
       const w = r - l;
       const h = btm - t;
       if (w < 8 || h < 8) continue;
-      const name = readItemName(s, i) || String(i);
+      const name = names ? (readItemName(s, i) || String(i)) : String(i);
       out.push({
         id: `live:${i}:${name}`,
         name,

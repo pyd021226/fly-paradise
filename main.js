@@ -359,10 +359,31 @@ function toOverlayIcons(list, physical) {
 let slowIconAt = 0;
 let uiaNames = null;
 let nameAt = 0;
+let binAt = 0;
+let binHasCached = false;
 
 function fakeName(name) {
   const s = String(name || '').trim();
   return !s || /^\d+$/.test(s);
+}
+
+function recycleCached() {
+  const now = Date.now();
+  if (now - binAt > 2000) {
+    binAt = now;
+    binHasCached = recycleBinHasItems();
+  }
+  return binHasCached;
+}
+
+function keepNames(live) {
+  if (!lastLive || !lastLive.length) return live;
+  return live.map((ic, i) => {
+    if (!fakeName(ic.name)) return ic;
+    const prev = lastLive[i];
+    if (!prev || fakeName(prev.name)) return ic;
+    return { ...ic, name: prev.name, id: `live:${i}:${prev.name}` };
+  });
 }
 
 function mergeNames(live) {
@@ -397,18 +418,19 @@ function publishIcons() {
     send('icons', { icons: toOverlayIcons(listDesktopIconsGrid(screen), false) });
     return;
   }
-  const live = fetchIconRects();
   const now = Date.now();
-  if (now - nameAt > 2500) {
+  const wantNames = now - nameAt > 8000;
+  if (wantNames) {
     nameAt = now;
     fetchLiveIcons().then((slow) => {
       if (slow && slow.length) uiaNames = slow;
     });
   }
+  const live = fetchIconRects({ names: wantNames });
   if (live && live.length) {
-    lastLive = mergeNames(live);
+    lastLive = mergeNames(keepNames(live));
     pruneLaunches();
-    const binHas = recycleBinHasItems();
+    const binHas = recycleCached();
     const mapped = toOverlayIcons(lastLive, true).map((ic) => ({
       ...ic,
       recycleBin: binHas && isRecycleBinName(ic.name),
@@ -467,7 +489,7 @@ function refitDesktop() {
   publishGeometry();
 }
 
-app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('enable-transparent-visuals');
 app.setAppUserModelId(isAnnoy ? 'com.desktopfly.welfare' : 'com.desktopfly.pet');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 
@@ -519,7 +541,7 @@ if (!app.requestSingleInstanceLock()) {
       iconTimer = setInterval(publishIcons, 400);
       clickTimer = setInterval(() => {
         if (!toolOn()) trackDesktopClicks();
-      }, 16);
+      }, 50);
       pinTimer = setInterval(() => {
         if (!overlay || overlay.isDestroyed() || toolOn()) return;
         applyLayer();
