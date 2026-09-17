@@ -44,6 +44,7 @@ function mateMs() { return fast ? FAST_MS : MATE_MS; }
 function eggMs() { return fast ? FAST_MS : EGG_MS; }
 function pupaMs() { return fast ? FAST_MS : PUPA_MS; }
 function ripeMs() { return fast ? FAST_MS : RIPE_MS; }
+function dieAfterMs() { return fast ? 8000 : 180000; }
 function eatNeedFor(unit) {
   if (fast) return FAST_EAT;
   if (unit && unit.instar === 1) return EAT_L1;
@@ -970,7 +971,8 @@ function wanderHeading(fly, dt, now, toward) {
 function stepFly(fly, dt, now) {
   if (fly.state === 'dead') return;
   if (!fly.born) fly.born = now;
-  if (fly.mateCool && now < fly.mateCool) fly.ripe = false;
+  if (fly.retired) fly.ripe = false;
+  else if (fly.mateCool && now < fly.mateCool) fly.ripe = false;
   else if (!fly.needMeal) {
     if (!fly.ripe && now - fly.born >= ripeMs()) fly.ripe = true;
   } else if ((fly.eatUnits || 0) >= eatNeedFor(fly)) {
@@ -991,6 +993,19 @@ function stepFly(fly, dt, now) {
     fly.vx = 0;
     fly.vy = 0;
     return;
+  }
+
+  if (fly.retireAt && !fly.dieAt && now >= fly.retireAt) {
+    const ang = rand(0, Math.PI * 2);
+    fly.dieAt = now + 5000;
+    fly.state = 'fly';
+    fly.mission = 'dying';
+    fly.perch = null;
+    fly.target = null;
+    fly.heading = ang;
+    fly.vx = Math.cos(ang) * 380;
+    fly.vy = Math.sin(ang) * 380;
+    fly.takeoffUntil = now + 350;
   }
 
   if (fly.dieAt) {
@@ -1402,7 +1417,7 @@ function beginPair(a, b, now) {
 function tryPairAll(now) {
   const ready = [];
   for (const f of flies) {
-    if (f.ripe && !f.mateSeek && f.state !== 'dead' && f.state !== 'mate' && !f.dieAt && !(f.mateCool && now < f.mateCool)) ready.push(f);
+    if (f.ripe && !f.retired && !f.mateSeek && f.state !== 'dead' && f.state !== 'mate' && !f.dieAt && !(f.mateCool && now < f.mateCool)) ready.push(f);
   }
   const males = ready.filter((f) => f.sex === 'm');
   const females = ready.filter((f) => f.sex === 'f');
@@ -1484,17 +1499,16 @@ function finishMate(fly, now) {
     f.mateUntil = 0;
     f.mateSeek = 0;
     if (f.mates >= 2) {
-      const ang = rand(0, Math.PI * 2);
-      f.dieAt = now + 5000;
-      f.state = 'fly';
-      f.mission = 'dying';
-      f.perch = null;
-      f.target = null;
+      f.retired = true;
       f.ripe = false;
-      f.heading = ang;
-      f.vx = Math.cos(ang) * 380;
-      f.vy = Math.sin(ang) * 380;
-      f.takeoffUntil = now + 350;
+      f.retireAt = now + dieAfterMs();
+      const ic = nearestIconTo(f.x, f.y) || randomIcon();
+      if (ic) forceLand(f, ic, now);
+      else {
+        f.state = 'fly';
+        f.mission = 'food';
+      }
+      f.stillUntil = now + rand(400, 2000);
       return;
     }
     const ic = nearestIconTo(f.x, f.y) || randomIcon();
@@ -2686,7 +2700,7 @@ function publishLife() {
 
 const FLY_TS = [
   'restUntil', 'stillUntil', 'settleUntil', 'ignoreThreatUntil', 'scareUntil',
-  'nextTurn', 'born', 'mealDoneAt', 'mateUntil', 'mateCool', 'dieAt',
+  'nextTurn', 'born', 'mealDoneAt', 'mateUntil', 'mateCool', 'dieAt', 'retireAt',
   'takeoffUntil', 'leaveAt', 'burstUntil', 'eatBegan',
 ];
 
