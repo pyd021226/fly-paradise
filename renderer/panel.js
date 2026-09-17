@@ -86,13 +86,14 @@ if (api.onLife) {
     lastLife = last;
     const el = $('stats');
     if (!el) return;
-    let line = `共计 ${last.adults || 0}　卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}`;
-    line += `<span class="m">褐（A_B_C_/A_B_cc） ${last.wild || 0}</span>`;
-    line += `<span class="m">中（A_bbC_/A_bbcc） ${last.mid || 0}</span>`;
-    line += `<span class="m">深（aaB_C_/aaB_cc） ${last.deep || 0}</span>`;
-    line += `<span class="m">白（aabbC_） ${last.white || 0}</span>`;
-    line += `<span class="m">绿（aabbcc） ${last.green || 0}</span>`;
-    if (last.rainbow) line += `<span class="m">虹（aabbccxx） ${last.rainbow}</span>`;
+    let line = `<span class="m">共计 ${last.adults || 0}</span>`;
+    line += `卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}`;
+    line += `<span class="m">褐色（A_B_C_/A_B_cc） ${last.wild || 0}</span>`;
+    line += `<span class="m">中褐（A_bbC_/A_bbcc） ${last.mid || 0}</span>`;
+    line += `<span class="m">深褐（aaB_C_/aaB_cc） ${last.deep || 0}</span>`;
+    line += `<span class="m">白色（aabbC_） ${last.white || 0}</span>`;
+    line += `<span class="m">绿色（aabbcc） ${last.green || 0}</span>`;
+    if (last.rainbow) line += `<span class="m">彩虹（aabbccxx） ${last.rainbow}</span>`;
     if (isAnnoy) line += `<span class="m">绿峰值 ${last.greenPeak || 0}</span>`;
     if (last.breed) {
       line += `<br>${last.cleared ? '通关' : '计时'} ${fmtMs(last.breedMs)}`;
