@@ -179,9 +179,9 @@ function bodyPx(fly) {
 function senseRadius(fly) {
   const L = bodyPx(fly);
   const t = clamp(mouse.spd / 3200, 0, 1);
-  const flying = fly.state === 'fly' || fly.state === 'flee' || swatterOn || ragOn;
-  const minB = flying ? 22 : 8;
-  const maxB = 34;
+  const flying = fly.state === 'fly' || fly.state === 'flee';
+  const minB = flying ? 20 : 4;
+  const maxB = 30;
   return L * (minB + (maxB - minB) * t);
 }
 
@@ -794,7 +794,13 @@ function scare(fly, now, intensity) {
   fly.ci = null;
   fly.mateSeek = 0;
   const linked = flies.find((x) => x.mateSeek === fly.id);
-  if (linked) linked.mateSeek = 0;
+  if (linked) {
+    linked.mateSeek = 0;
+    linked.ripe = false;
+    linked.mateCool = now + 8000;
+  }
+  if (fly.ripe) fly.mateCool = now + 8000;
+  fly.ripe = false;
   fly.intensity = t;
   fly.fleeSpeed = 360 + t * 480;
   fly.scareUntil = now + (4000 + t * 12000);
@@ -985,8 +991,7 @@ function stepFly(fly, dt, now) {
 
   if (fly.state === 'mate') {
     const p = dangerPos();
-    const d = Math.hypot(fly.x - p.x, fly.y - p.y);
-    if (d < Math.max(180, senseRadius(fly))) {
+    if (Math.hypot(fly.x - p.x, fly.y - p.y) < 140) {
       failMate(fly, now);
       return;
     }
@@ -1948,7 +1953,7 @@ function inPaddle(px, py) {
   const iy = PADDLE_CY + (py - mouse.y) / (scale * sy);
   const dx = (ix - PADDLE_CX) / PADDLE_RX;
   const dy = (iy - PADDLE_CY) / PADDLE_RY;
-  return dx * dx + dy * dy <= 0.42;
+  return dx * dx + dy * dy <= 1;
 }
 
 function clampHandle() {
@@ -2857,11 +2862,6 @@ requestAnimationFrame(frame);
 
 function trackTool(x, y) {
   if (!swatterOn && !ragOn) return;
-  const dx = x - mouse.x;
-  const dy = y - mouse.y;
-  mouse.vx = dx * 60;
-  mouse.vy = dy * 60;
-  mouse.spd = Math.hypot(mouse.vx, mouse.vy);
   mouse.x = x;
   mouse.y = y;
   if (swatterOn) clampHandle();
