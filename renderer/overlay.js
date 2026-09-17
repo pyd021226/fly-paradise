@@ -190,10 +190,11 @@ function mateRadius(fly) {
 }
 
 function iconGlyph(ic) {
-  const side = Math.max(18, Math.min(ic.h - 2, 32));
+  if (!ic) return { x: 0, y: 0, w: 32, h: 32 };
+  const side = Math.max(18, Math.min((ic.h || 32) - 2, 32));
   return {
-    x: ic.x + (ic.w - side) / 2,
-    y: ic.y + Math.max(0, (ic.h - side) / 2),
+    x: ic.x + ((ic.w || side) - side) / 2,
+    y: ic.y + Math.max(0, ((ic.h || side) - side) / 2),
     w: side,
     h: side,
   };
@@ -302,6 +303,7 @@ function iconPad(ic) {
 }
 
 function clampToGlyph(ic, x, y) {
+  if (!ic) return { x, y };
   const g = iconGlyph(ic);
   return {
     x: clamp(x, g.x + 5, g.x + g.w - 5),
@@ -1094,6 +1096,13 @@ function stepFly(fly, dt, now) {
       const still = icons.find((i) => i.id === fly.perch.id)
         || icons.find((i) => i.name === fly.perch.name);
       if (still) fly.perch = still;
+      else {
+        fly.perch = null;
+        fly.state = 'fly';
+        fly.mission = 'land';
+        fly.target = nearestIconTo(fly.x, fly.y) || randomIcon();
+        return;
+      }
       if (!fly.crawling) {
         if (fly._ix != null) {
           const dx = fly.perch.x - fly._ix;
@@ -2006,7 +2015,9 @@ function swatAt(now) {
 
 function step(dt, now) {
   if (paused) return;
-  for (const f of flies) stepFly(f, dt, now);
+  for (const f of flies) {
+    try { stepFly(f, dt, now); } catch (err) { console.error(err); }
+  }
   flies = flies.filter((f) => f.state !== 'dead');
   tryPairAll(now);
   closePairs(now);
