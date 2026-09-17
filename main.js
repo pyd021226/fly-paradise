@@ -12,6 +12,8 @@ import { fetchIconRects } from './src/icon-rects.js';
 import { startRawMouse, stopRawMouse } from './src/raw-mouse.js';
 import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs } from './src/desktop-layer.js';
 import { createTrayController } from './src/tray.js';
+import { createCpuBalancer } from './src/cpu-affinity.js';
+import { bindPanelLifecycle } from './src/panel-lifecycle.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(HERE, 'assets', 'tray.png');
@@ -40,6 +42,9 @@ let autoStart = isAnnoy;
 let overlay = null;
 let panel = null;
 let trayController = null;
+let cpuBalancer = null;
+let performanceMode = true;
+let cpuStatus = '系统调度';
 let swatterOn = false;
 let ragOn = false;
 let paused = false;
@@ -68,6 +73,7 @@ function send(channel, payload) {
 
 function publishState() {
   const state = {
+    performanceMode, cpuStatus,
     swatterOn, ragOn, paused, fast, watch, breed, gate, autoStart, annoy: isAnnoy,
   };
   if (panel && !panel.isDestroyed()) {
@@ -80,11 +86,12 @@ function showPanel() {
   if (!panel || panel.isDestroyed()) return;
   if (panel.isMinimized()) panel.restore();
   panel.show();
+  applyLayer();
   panel.focus();
 }
 
 function raisePanelOverOverlay() {
-  if (!panel || panel.isDestroyed()) return;
+  if (!panel || panel.isDestroyed() || !panel.isVisible() || panel.isMinimized()) return;
   panel.setAlwaysOnTop(true, 'screen-saver');
   panel.moveTop();
 }
@@ -192,7 +199,7 @@ function applyTool() {
     pushToolCursor();
     const ok = globalShortcut.register('Escape', putAwaySwatter);
     if (!ok) process.stderr.write('[tool] Escape shortcut failed\n');
-  } else if (panel && !panel.isDestroyed()) {
+  } else if (panel && !panel.isDestroyed() && panel.isVisible() && !panel.isMinimized()) {
     panel.focus();
   }
   applyLayer();
@@ -270,15 +277,9 @@ function createPanel() {
   });
   win.setMenu(null);
   win.loadFile(path.join(HERE, 'renderer', 'panel.html'));
-  win.on('minimize', (e) => {
-    if (app.isQuitting) return;
-    e.preventDefault();
-    win.hide();
-  });
-  win.on('close', (e) => {
-    if (app.isQuitting) return;
-    e.preventDefault();
-    win.hide();
+  bindPanelLifecycle(win, {
+    isQuitting: () => !!app.isQuitting,
+    restoreLayer: applyLayer,
   });
   win.on('closed', () => {
     panel = null;
@@ -508,6 +509,13 @@ function refitDesktop() {
 
 function handleAction(msg) {
   const name = typeof msg === 'string' ? msg : msg?.name;
+  if (name === 'performance') {
+    performanceMode = !performanceMode;
+    cpuBalancer?.setEnabled(performanceMode);
+    send('cmd', { name: 'performance', value: performanceMode });
+    publishState();
+    return;
+  }
   if (name === 'swatter') {
     swatterOn = !swatterOn;
     if (swatterOn) ragOn = false;
@@ -587,6 +595,11 @@ if (!app.requestSingleInstanceLock()) {
       }
     } catch { /* no run */ }
     overlay = createOverlay(virtualBounds());
+    cpuBalancer = createCpuBalancer({
+      getRendererPid: () => overlay && !overlay.isDestroyed() ? overlay.webContents.getOSProcessId() : 0,
+      report: value => { if (value !== cpuStatus) { cpuStatus = value; publishState(); } },
+    });
+    console.log('[gpu]', app.getGPUFeatureStatus());
     overlay.webContents.once('did-finish-load', () => {
       publishGeometry();
       send('cmd', { name: 'configure', annoy: isAnnoy, watch, breed });
@@ -636,6 +649,8 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('swatter-off', putAwaySwatter);
 
     ipcMain.on('life-stats', (_e, s) => {
+      if (_e.sender !== overlay?.webContents) return;
+      cpuBalancer?.setPopulation(Number(s?.adults) || 0);
       if (isAnnoy) {
         const g = Number(s && s.green) || 0;
         if (g > greenPeak) {
@@ -670,6 +685,8 @@ app.on('window-all-closed', () => {
 });
 app.on('before-quit', () => {
   app.isQuitting = true;
+  cpuBalancer?.dispose();
+  cpuBalancer = null;
   trayController?.destroy();
   trayController = null;
   if (overlay && !overlay.isDestroyed()) stopRawMouse(overlay);

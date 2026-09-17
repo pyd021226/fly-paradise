@@ -1,0 +1,58 @@
+<!doctype html><meta charset="utf-8"><title>Render benchmark</title>
+<script type="module">
+import { createFlyArt } from '../renderer/fly-art.js';
+import { SpriteCache } from '../renderer/sprite-cache.js';
+import { SPRITE_FRAMES, SPRITE_SIZE } from '../renderer/sprite-layout.js';
+const { ipcRenderer } = window.require('electron');
+const sprites = new SpriteCache();
+try {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1920; canvas.height = 1080;
+  const ctx = canvas.getContext('2d');
+  const art = createFlyArt(ctx);
+  const morphs = ['wild', 'mid', 'deep', 'white', 'green'];
+  const genes = [[0,0,0], [0,2,0], [2,0,0], [2,2,0], [2,2,2]];
+  const start = performance.now();
+  while (sprites.cache.size < 30) {
+    for (const morph of morphs) for (const sex of ['m', 'f']) for (const pose of ['fly', 'groom', 'rest']) sprites.get(morph, sex, pose);
+    if (sprites.failed || performance.now() - start > 12000) throw new Error('Worker cache failed to warm');
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  const warmupMs = performance.now() - start;
+  function run(count, cached) {
+    const samples = [];
+    for (let frame = 0; frame < 30; frame++) {
+      const started = performance.now();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < count; i++) {
+        const index = i % 5, sex = i % 2 ? 'm' : 'f';
+        const [geneD, geneP, geneG] = genes[index];
+        const phase = frame * 0.55 + i;
+        ctx.save(); ctx.translate(30 + i % 32 * 55, 30 + Math.floor(i / 32) * 40);
+        ctx.scale(1.5, 1.5); ctx.rotate(i * 0.2);
+        if (cached) {
+          const sprite = sprites.get(morphs[index], sex, 'fly');
+          const n = Math.floor(phase / (Math.PI * 2) * SPRITE_FRAMES) % SPRITE_FRAMES;
+          ctx.drawImage(sprite, n * SPRITE_SIZE, 0, SPRITE_SIZE, SPRITE_SIZE, -8, -8, 16, 16);
+        } else {
+          art.applyBody({ geneD, geneP, geneG }, sex === 'm', false, frame);
+          art.drawDorsal(true, frame, i, false);
+        }
+        ctx.restore();
+      }
+      // Force completion so the comparison includes raster work, not just enqueueing.
+      ctx.getImageData(0, 0, 1, 1);
+      if (frame >= 10) samples.push(performance.now() - started);
+    }
+    samples.sort((a, b) => a - b);
+    return { medianMs: samples[10], p95Ms: samples[19] };
+  }
+  const results = [12, 192, 384].map(count => ({ count, vector: run(count, false), workerSprites: run(count, true) }));
+  sprites.dispose();
+  if (sprites.cache.size || sprites.queue.size || sprites.worker) throw new Error('Cache resources not released');
+  ipcRenderer.send('benchmark-result', { warmupMs, results, cleanup: 'passed' });
+} catch (error) {
+  sprites.dispose();
+  ipcRenderer.send('benchmark-result', { error: String(error) });
+}
+</script>

@@ -1,4 +1,5 @@
 node_modules/
+.benchmark-profile/
 dist/
 release/
 *.log

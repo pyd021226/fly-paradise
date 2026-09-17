@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:#f4efe6}canvas{display:block}</style>
+<canvas width="180" height="100"></canvas>
+<script type="module">
+import { drawTexturedRag } from '../renderer/rag-art.js';
+const canvas = document.querySelector('canvas');
+const ctx = canvas.getContext('2d');
+ctx.fillStyle = '#f4efe6'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+drawTexturedRag(ctx, 55, 48);
+drawTexturedRag(ctx, 125, 48, { wiping: true });
+window.ragReady = true;
+</script>

@@ -16,6 +16,8 @@ export function createTrayController({ icon, onShow, onAction }) {
   const rebuildMenu = () => {
     const menu = Menu.buildFromTemplate([
       { label: '打开控制面板', click: onShow },
+      menuItem('自动性能优化', 'performance', state.performanceMode, onAction, { type: 'checkbox' }),
+      { label: state.cpuStatus || '系统调度', enabled: false },
       { type: 'separator' },
       menuItem('暂停活动', 'pause', state.paused, onAction, { type: 'checkbox' }),
       menuItem('全图透视', 'xray', state.watch, onAction, { type: 'checkbox' }),
