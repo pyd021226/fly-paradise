@@ -462,6 +462,7 @@ function refitDesktop() {
   publishGeometry();
 }
 
+app.disableHardwareAcceleration();
 app.setAppUserModelId(isAnnoy ? 'com.desktopfly.welfare' : 'com.desktopfly.pet');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 
@@ -507,15 +508,18 @@ if (!app.requestSingleInstanceLock()) {
     panel.once('ready-to-show', () => panel.show());
     panel.show();
 
-    mouseTimer = setInterval(pollMouse, 1000 / 30);
-    iconTimer = setInterval(publishIcons, 100);
-    clickTimer = setInterval(() => {
-      if (!toolOn()) trackDesktopClicks();
-    }, 16);
-    pinTimer = setInterval(() => {
-      if (!overlay || overlay.isDestroyed() || toolOn()) return;
-      applyLayer();
-    }, 2000);
+    setTimeout(() => {
+      if (!overlay || overlay.isDestroyed()) return;
+      mouseTimer = setInterval(pollMouse, 1000 / 30);
+      iconTimer = setInterval(publishIcons, 100);
+      clickTimer = setInterval(() => {
+        if (!toolOn()) trackDesktopClicks();
+      }, 16);
+      pinTimer = setInterval(() => {
+        if (!overlay || overlay.isDestroyed() || toolOn()) return;
+        applyLayer();
+      }, 2000);
+    }, 800);
 
     ipcMain.on('snapshot', (_e, data) => {
       if (data && data.breed) writeSave(data);

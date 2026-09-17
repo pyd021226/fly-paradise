@@ -7,7 +7,18 @@ const FindWindowW = user32.func('void *__stdcall FindWindowW(str16 lpClassName, 
 const FindWindowExW = user32.func(
   'void *__stdcall FindWindowExW(void *hWndParent, void *hWndChildAfter, str16 lpszClass, str16 lpszWindow)',
 );
-const SendMessageW = user32.func('intptr __stdcall SendMessageW(void *hWnd, uint32 Msg, uintptr wParam, uintptr lParam)');
+const SendMessageTimeoutW = user32.func(
+  'intptr __stdcall SendMessageTimeoutW(void *hWnd, uint32 Msg, uintptr wParam, uintptr lParam, uint32 fuFlags, uint32 uTimeout, void *lpdwResult)',
+);
+const SMTO_ABORTIFHUNG = 0x0002;
+const smResult = Buffer.alloc(8);
+
+function sendLv(hwnd, msg, wParam, lParam) {
+  smResult.fill(0);
+  const ok = SendMessageTimeoutW(hwnd, msg, wParam, lParam || 0, SMTO_ABORTIFHUNG, 80, smResult);
+  if (!ok) return 0;
+  return Number(smResult.readBigUInt64LE(0));
+}
 const GetWindowThreadProcessId = user32.func(
   'uint32 __stdcall GetWindowThreadProcessId(void *hWnd, void *lpdwProcessId)',
 );
@@ -117,7 +128,7 @@ function readItemName(s, index) {
     blob.writeBigUInt64LE(textAddr, 40);
     blob.writeInt32LE(260, 48);
     if (!WriteProcessMemory(s.proc, s.remote, blob, 600, null)) return '';
-    SendMessageW(s.lv, LVM_GETITEMTEXTW, index, s.remoteN + 16n);
+    sendLv(s.lv, LVM_GETITEMTEXTW, index, s.remoteN + 16n);
     blob.fill(0);
     if (!ReadProcessMemory(s.proc, s.remote, blob, 600, null)) return '';
     const text = blob.slice(80);
@@ -134,7 +145,7 @@ export function fetchIconRects() {
     try { SetThreadDpiAwarenessContext(-4); } catch { /* older Windows */ }
     const s = ensureSess();
     if (!s) return null;
-    const count = Number(SendMessageW(s.lv, LVM_GETITEMCOUNT, 0, 0));
+    const count = Number(sendLv(s.lv, LVM_GETITEMCOUNT, 0, 0));
     if (!count || count < 1) {
       dropSess();
       return null;
@@ -151,7 +162,7 @@ export function fetchIconRects() {
         dropSess();
         return null;
       }
-      SendMessageW(s.lv, LVM_GETITEMRECT, i, s.remoteN);
+      sendLv(s.lv, LVM_GETITEMRECT, i, s.remoteN);
       if (!ReadProcessMemory(s.proc, s.remote, buf, 16, null)) continue;
       const l = buf.readInt32LE(0);
       const t = buf.readInt32LE(4);

@@ -1,7 +1,7 @@
 {
   "name": "desktop-fly-pet",
   "productName": "果蝇乐园",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Desktop fruit flies that land on icons, flee the cursor, eat, and can be swatted",
   "type": "module",
   "main": "main.js",
@@ -52,7 +52,8 @@
       "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "果蝇乐园"
+      "shortcutName": "果蝇乐园",
+      "include": "build/installer.nsh"
     }
   }
 }
