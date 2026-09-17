@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>果蝇乐园</title>
+  <style>
+    :root {
+      --bg: #f4efe6;
+      --ink: #2a241c;
+      --muted: #7a7166;
+      --btn: #fffdf8;
+      --line: #ddd4c6;
+      --pink: #e23d7a;
+    }
+    html, body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.45 "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+      user-select: none;
+    }
+    main { padding: 18px 16px 16px; }
+    h1 {
+      font-size: 17px;
+      font-weight: 650;
+      margin: 0 0 4px;
+    }
+    p.hint {
+      color: var(--muted);
+      font-size: 12px;
+      margin: 0 0 16px;
+      min-height: 2.6em;
+    }
+    button {
+      display: block;
+      width: 100%;
+      border: 1px solid var(--line);
+      background: var(--btn);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 11px 12px;
+      margin: 0 0 8px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:hover { filter: brightness(0.97); }
+    button:active { transform: translateY(1px); }
+    button.primary {
+      background: var(--pink);
+      color: #fff;
+      border-color: transparent;
+      font-weight: 650;
+      padding: 14px 12px;
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+    button.primary.on,
+    button.on {
+      background: #2a241c;
+      color: #fff;
+      border-color: transparent;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .row button { margin: 0; }
+    .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(0,0,0,0.2); }
+    .stats {
+      margin: 0 0 14px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--btn);
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--ink);
+    }
+    .stats b { font-weight: 650; }
+    #gate { display: none; }
+    body.gate main > :not(#gate) { display: none; }
+    body.gate #gate { display: block; }
+  </style>
+</head>
+<body>
+  <main>
+    <div id="gate">
+      <h1>上次繁殖还在</h1>
+      <p class="hint">继续接着养，或清场重开。</p>
+      <button class="primary" id="resume" type="button">继续</button>
+      <button id="restart" type="button">重新开始</button>
+    </div>
+    <h1>果蝇乐园</h1>
+    <p class="hint" id="hint">苍蝇在桌面上。点下面拿拍去打，Esc 收起。</p>
+    <div class="stats" id="stats">卵 0　蛆 0/0/0　蛹 0<br>成虫 0　绿 0　绿峰值 0</div>
+    <button id="xray" type="button">全图透视</button>
+    <button id="autoStart" type="button">开机启动</button>
+    <button class="primary" id="swatter" type="button">拿出苍蝇拍</button>
+    <button id="rag" type="button">拿出抹布</button>
+    <div class="row">
+      <button id="sexF" type="button">雌</button>
+      <button id="sexM" type="button" class="on">雄</button>
+    </div>
+    <div class="row">
+      <button id="add" type="button">加一只</button>
+      <button id="scare" type="button">吓它们</button>
+    </div>
+    <button id="quit" type="button">退出</button>
+  </main>
+  <script src="./panel.js"></script>
+</body>
+</html>

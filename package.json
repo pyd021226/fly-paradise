@@ -1,0 +1,58 @@
+{
+  "name": "desktop-fly-pet",
+  "productName": "果蝇乐园",
+  "version": "0.3.0",
+  "description": "Desktop fruit flies that land on icons, flee the cursor, eat, and can be swatted",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "start:annoy": "node scripts/set-flavor.mjs annoy && electron . && node scripts/set-flavor.mjs breed",
+    "dist": "node scripts/set-flavor.mjs breed && electron-builder --win -c.productName=果蝇乐园 -c.appId=com.desktopfly.pet",
+    "dist:annoy": "node scripts/set-flavor.mjs annoy && electron-builder --win -c.productName=果蝇乐园造福版 -c.appId=com.desktopfly.welfare && node scripts/set-flavor.mjs breed"
+  },
+  "license": "MIT",
+  "author": "desktop-fly-pet",
+  "dependencies": {
+    "koffi": "^3.3.0"
+  },
+  "devDependencies": {
+    "electron": "^32.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.desktopfly.pet",
+    "productName": "果蝇乐园",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.mjs",
+      "preload-panel.mjs",
+      "package.json",
+      "flavor.json",
+      "renderer/**/*",
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "icon": "assets/icon.png",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "果蝇乐园"
+    }
+  }
+}
