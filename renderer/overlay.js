@@ -1289,9 +1289,8 @@ function stepFly(fly, dt, now) {
     if (now - fly.airSince >= AIR_MAX_MS) {
       const ic = nearestIconTo(fly.x, fly.y) || randomIcon();
       if (ic) {
-        forceLand(fly, ic, now);
-        fly.settleUntil = now + 2500;
-        fly.airSince = 0;
+        fly.mission = 'land';
+        fly.target = ic;
       }
     }
   }
