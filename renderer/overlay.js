@@ -778,6 +778,7 @@ function interruptEat(unit) {
 function scare(fly, now, intensity) {
   interruptEat(fly);
   const t = clamp(intensity, 0.25, 1);
+  const pairing = fly.state === 'mate' || !!fly.mateSeek;
   if (fly.state === 'mate') {
     const other = flies.find((x) => x.id === fly.mateId);
     fly.mateId = 0;
@@ -801,8 +802,10 @@ function scare(fly, now, intensity) {
     linked.ripe = false;
     linked.mateCool = now + 8000;
   }
-  if (fly.ripe) fly.mateCool = now + 8000;
-  fly.ripe = false;
+  if (pairing) {
+    fly.ripe = false;
+    fly.mateCool = now + 8000;
+  }
   fly.intensity = t;
   fly.fleeSpeed = 360 + t * 480;
   fly.scareUntil = now + (4000 + t * 12000);
@@ -1518,6 +1521,25 @@ function startMate(a, b, now) {
   a.crawling = b.crawling = false;
 }
 
+function settleAfterMate(f, now) {
+  const ic = nearestIconTo(f.x, f.y) || randomIcon();
+  if (!ic) {
+    f.state = 'fly';
+    f.mission = 'food';
+    f.stillUntil = now + rand(400, 2000);
+    return;
+  }
+  const c = iconPad(ic);
+  if (Math.hypot(c.x - f.x, c.y - f.y) < 48) forceLand(f, ic, now);
+  else {
+    f.state = 'fly';
+    f.mission = 'land';
+    f.target = ic;
+    f.perch = null;
+  }
+  f.stillUntil = now + rand(400, 2000);
+}
+
 function finishMate(fly, now) {
   const other = flies.find((x) => x.id === fly.mateId);
   const second = (fly.mates || 0) >= 1 || (other && (other.mates || 0) >= 1);
@@ -1539,22 +1561,8 @@ function finishMate(fly, now) {
       f.retired = true;
       f.ripe = false;
       if (!f.kidSeen) f.kidDieAt = now + retireFallbackMs();
-      const ic = nearestIconTo(f.x, f.y) || randomIcon();
-      if (ic) forceLand(f, ic, now);
-      else {
-        f.state = 'fly';
-        f.mission = 'food';
-      }
-      f.stillUntil = now + rand(400, 2000);
-      return;
     }
-    const ic = nearestIconTo(f.x, f.y) || randomIcon();
-    if (ic) forceLand(f, ic, now);
-    else {
-      f.state = 'fly';
-      f.mission = 'food';
-    }
-    f.stillUntil = now + rand(400, 2000);
+    settleAfterMate(f, now);
   };
   reset(fly);
   if (other && other.state === 'mate') reset(other);
