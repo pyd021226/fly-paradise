@@ -2701,12 +2701,11 @@ function publishLife() {
     else if (L.instar === 2) l2 += 1;
     else l3 += 1;
   }
-  let green = 0;
-  let rainbow = 0;
+  let morphs = { wild: 0, mid: 0, deep: 0, white: 0, green: 0, rainbow: 0 };
   for (const f of flies) {
     const m = morphOf(f.geneD, f.geneP, f.geneG, f.geneX, f.geneY);
-    if (m === 'rainbow') rainbow += 1;
-    else if (m === 'green') green += 1;
+    if (morphs[m] == null) morphs.wild += 1;
+    else morphs[m] += 1;
   }
   window.fly.sendLife({
     eggs: eggs.length,
@@ -2715,8 +2714,12 @@ function publishLife() {
     l3,
     pupae: pupae.length,
     adults: flies.length,
-    green,
-    rainbow,
+    green: morphs.green,
+    rainbow: morphs.rainbow,
+    wild: morphs.wild,
+    mid: morphs.mid,
+    deep: morphs.deep,
+    white: morphs.white,
     breed,
     cleared,
     breedMs,
