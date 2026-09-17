@@ -44,7 +44,7 @@ function mateMs() { return fast ? FAST_MS : MATE_MS; }
 function eggMs() { return fast ? FAST_MS : EGG_MS; }
 function pupaMs() { return fast ? FAST_MS : PUPA_MS; }
 function ripeMs() { return fast ? FAST_MS : RIPE_MS; }
-function kidDieMs() { return fast ? FAST_MS : 10000; }
+function kidDieMs() { return fast ? FAST_MS : 120000; }
 function eatNeedFor(unit) {
   if (fast) return FAST_EAT;
   if (unit && unit.instar === 1) return EAT_L1;
@@ -1487,10 +1487,8 @@ function startMate(a, b, now) {
 
 function finishMate(fly, now) {
   const other = flies.find((x) => x.id === fly.mateId);
-  const firstOf = [];
-  if ((fly.mates || 0) === 0) firstOf.push(fly.id);
-  if (other && (other.mates || 0) === 0) firstOf.push(other.id);
-  if (other && !adultsFull()) layEggs(fly.x, fly.y, fly, other, firstOf);
+  const second = (fly.mates || 0) >= 1 || (other && (other.mates || 0) >= 1);
+  if (other && !(adultsFull() && second)) layEggs(fly.x, fly.y, fly, other);
   const reset = (f) => {
     f.mates = (f.mates || 0) + 1;
     f.ripe = false;
@@ -1504,6 +1502,7 @@ function finishMate(fly, now) {
     if (f.mates >= 2) {
       f.retired = true;
       f.ripe = false;
+      f.kidDieAt = now + kidDieMs();
       const ic = nearestIconTo(f.x, f.y) || randomIcon();
       if (ic) forceLand(f, ic, now);
       else {
@@ -1525,11 +1524,10 @@ function finishMate(fly, now) {
   if (other && other.state === 'mate') reset(other);
 }
 
-function layEggs(x, y, mom, dad, firstOf) {
+function layEggs(x, y, mom, dad) {
   const want = breed ? 2 + Math.floor(Math.random() * 2) : 6 + Math.floor(Math.random() * 3);
   const room = breed ? Math.max(0, BREED_EGGS - eggs.length) : want;
   const n = Math.min(want, room);
-  const from = firstOf && firstOf.length ? firstOf.slice() : null;
   for (let i = 0; i < n; i++) {
     const geneD = inheritGene(mom && mom.geneD, dad && dad.geneD);
     const geneP = inheritGene(mom && mom.geneP, dad && dad.geneP);
@@ -1547,7 +1545,6 @@ function layEggs(x, y, mom, dad, firstOf) {
       geneX: extra.geneX,
       geneY: extra.geneY,
       sex: Math.random() < 0.5 ? 'm' : 'f',
-      firstOf: from,
     });
   }
 }
@@ -1579,7 +1576,6 @@ function hatchEgg(e, now) {
     geneX: e.geneX || 0,
     geneY: e.geneY || 0,
     sex: e.sex,
-    firstOf: e.firstOf || null,
   });
 }
 
@@ -1682,7 +1678,6 @@ function pupate(L, now) {
     geneX: L.geneX || 0,
     geneY: L.geneY || 0,
     sex: L.sex,
-    firstOf: L.firstOf || null,
   });
 }
 
@@ -1699,19 +1694,7 @@ function eclose(p, now) {
   f.vy = Math.sin(f.heading) * 320;
   f.takeoffUntil = now + 700;
   if (morphOf(f.geneD, f.geneP, f.geneG, f.geneX, f.geneY) === 'rainbow') playRainbowFanfare(now);
-  noteFirstEclose(p.firstOf, now);
   return true;
-}
-
-function noteFirstEclose(firstOf, now) {
-  if (!firstOf || !firstOf.length) return;
-  const wait = kidDieMs();
-  for (const id of firstOf) {
-    const parent = flies.find((x) => x.id === id && x.state !== 'dead');
-    if (!parent || parent.kidSeen) continue;
-    parent.kidSeen = true;
-    parent.kidDieAt = now + wait;
-  }
 }
 
 function foodOpen(food) {
