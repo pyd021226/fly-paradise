@@ -11,6 +11,7 @@ function fmtMs(ms) {
 }
 
 let lastLife = { cleared: false, breedMs: 0, breed: true };
+let isAnnoy = false;
 
 function render(s) {
   const on = !!s.swatterOn;
@@ -19,6 +20,7 @@ function render(s) {
   const breed = s.breed !== false;
   const gate = !!s.gate;
   const autoStart = !!s.autoStart;
+  isAnnoy = !!s.annoy;
   document.body.classList.toggle('gate', gate);
   const btn = $('swatter');
   btn.textContent = on ? '收起苍蝇拍' : '拿出苍蝇拍';
@@ -27,8 +29,7 @@ function render(s) {
   $('rag').classList.toggle('on', rag);
   $('xray').classList.toggle('on', watch);
   $('xray').textContent = watch ? '透视中' : '全图透视';
-  $('autoStart').classList.toggle('on', autoStart);
-  $('autoStart').textContent = autoStart ? '开机启动：开' : '开机启动';
+  $('autoStart').checked = autoStart;
   if (on) {
     $('hint').textContent = '拍子跟着鼠标。左键打。Esc 还鼠标；点退出或关窗口随时能关。';
   } else if (rag) {
@@ -55,7 +56,7 @@ function setSex(next) {
 $('swatter').onclick = () => api.send('swatter');
 $('rag').onclick = () => api.send('rag');
 $('xray').onclick = () => api.send('xray');
-$('autoStart').onclick = () => api.send('autostart');
+$('autoStart').onchange = () => api.send('autostart');
 $('resume').onclick = () => api.send('resume');
 $('restart').onclick = () => api.send('restart');
 $('sexM').onclick = () => setSex('m');
@@ -80,7 +81,8 @@ if (api.onLife) {
     const el = $('stats');
     if (!el) return;
     const rain = last.rainbow ? `　虹 ${last.rainbow}` : '';
-    let line = `卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}<br>成虫 ${last.adults || 0}　绿 ${last.green || 0}${rain}　绿峰值 ${last.greenPeak || 0}`;
+    let line = `卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}<br>成虫 ${last.adults || 0}　绿 ${last.green || 0}${rain}`;
+    if (isAnnoy) line += `　绿峰值 ${last.greenPeak || 0}`;
     if (last.breed) {
       line += `<br>${last.cleared ? '通关' : '计时'} ${fmtMs(last.breedMs)}`;
     }

@@ -79,6 +79,16 @@
       color: var(--ink);
     }
     .stats b { font-weight: 650; }
+    .foot {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .foot input { margin: 0; accent-color: var(--ink); }
     #gate { display: none; }
     body.gate main > :not(#gate) { display: none; }
     body.gate #gate { display: block; }
@@ -94,9 +104,8 @@
     </div>
     <h1>果蝇乐园</h1>
     <p class="hint" id="hint">苍蝇在桌面上。点下面拿拍去打，Esc 收起。</p>
-    <div class="stats" id="stats">卵 0　蛆 0/0/0　蛹 0<br>成虫 0　绿 0　绿峰值 0</div>
+    <div class="stats" id="stats">卵 0　蛆 0/0/0　蛹 0<br>成虫 0　绿 0</div>
     <button id="xray" type="button">全图透视</button>
-    <button id="autoStart" type="button">开机启动</button>
     <button class="primary" id="swatter" type="button">拿出苍蝇拍</button>
     <button id="rag" type="button">拿出抹布</button>
     <div class="row">
@@ -108,6 +117,7 @@
       <button id="scare" type="button">吓它们</button>
     </div>
     <button id="quit" type="button">退出</button>
+    <label class="foot"><input id="autoStart" type="checkbox">开机启动</label>
   </main>
   <script src="./panel.js"></script>
 </body>

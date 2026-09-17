@@ -155,22 +155,16 @@ function applyLayer() {
   if (!overlay || overlay.isDestroyed()) return;
   glueOverlay();
   send('cmd', { name: 'watch', value: watch });
-  if (toolOn()) {
-    overlay.setAlwaysOnTop(true, 'screen-saver');
-    overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    raisePanelOverOverlay();
-    return;
-  }
   if (watch) {
     overlay.setAlwaysOnTop(true, 'screen-saver');
     overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    if (panel && !panel.isDestroyed()) panel.setAlwaysOnTop(false);
-    return;
+  } else {
+    overlay.setAlwaysOnTop(false);
+    overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
+    pinAboveDesktop(overlay);
   }
-  overlay.setAlwaysOnTop(false);
-  overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
-  pinAboveDesktop(overlay);
-  if (panel && !panel.isDestroyed()) panel.setAlwaysOnTop(false);
+  if (toolOn()) raisePanelOverOverlay();
+  else if (panel && !panel.isDestroyed()) panel.setAlwaysOnTop(false);
 }
 
 function applyTool() {
@@ -541,20 +535,22 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('swatter-off', putAwaySwatter);
 
     ipcMain.on('life-stats', (_e, s) => {
-      const g = Number(s && s.green) || 0;
-      if (g > greenPeak) {
-        greenPeak = g;
-        try { fs.writeFileSync(STATS_FILE, JSON.stringify({ greenPeak })); } catch { /* */ }
+      if (isAnnoy) {
+        const g = Number(s && s.green) || 0;
+        if (g > greenPeak) {
+          greenPeak = g;
+          try { fs.writeFileSync(STATS_FILE, JSON.stringify({ greenPeak })); } catch { /* */ }
+        }
       }
       if (panel && !panel.isDestroyed()) {
-        panel.webContents.send('life-stats', { ...s, greenPeak });
+        panel.webContents.send('life-stats', isAnnoy ? { ...s, greenPeak } : { ...s, greenPeak: 0 });
       }
     });
 
     ipcMain.on('panel-ready', () => {
       publishState();
       if (panel && !panel.isDestroyed()) {
-        panel.webContents.send('life-stats', { greenPeak });
+        panel.webContents.send('life-stats', isAnnoy ? { greenPeak } : { greenPeak: 0 });
       }
     });
 
