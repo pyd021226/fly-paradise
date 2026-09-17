@@ -294,6 +294,7 @@ let lmbWas = false;
 let press = null;
 let lastClick = null;
 const LAUNCH_MS = 30 * 60 * 1000;
+let iconsLiveAt = 0;
 
 function pruneLaunches() {
   const now = Date.now();
@@ -392,6 +393,10 @@ function mergeNames(live) {
 function publishIcons() {
   if (!overlay || overlay.isDestroyed()) return;
   if (toolOn()) return;
+  if (Date.now() < iconsLiveAt) {
+    send('icons', { icons: toOverlayIcons(listDesktopIconsGrid(screen), false) });
+    return;
+  }
   const live = fetchIconRects();
   const now = Date.now();
   if (now - nameAt > 2500) {
@@ -494,7 +499,6 @@ if (!app.requestSingleInstanceLock()) {
       }
     } catch { /* no run */ }
     overlay = createOverlay(virtualBounds());
-    pinAboveDesktop(overlay);
     overlay.webContents.once('did-finish-load', () => {
       publishGeometry();
       send('cmd', { name: 'configure', annoy: isAnnoy, watch, breed });
@@ -507,11 +511,12 @@ if (!app.requestSingleInstanceLock()) {
     panel = createPanel();
     panel.once('ready-to-show', () => panel.show());
     panel.show();
+    iconsLiveAt = Date.now() + 2500;
 
     setTimeout(() => {
       if (!overlay || overlay.isDestroyed()) return;
       mouseTimer = setInterval(pollMouse, 1000 / 30);
-      iconTimer = setInterval(publishIcons, 100);
+      iconTimer = setInterval(publishIcons, 400);
       clickTimer = setInterval(() => {
         if (!toolOn()) trackDesktopClicks();
       }, 16);

@@ -15,9 +15,9 @@ const smResult = Buffer.alloc(8);
 
 function sendLv(hwnd, msg, wParam, lParam) {
   smResult.fill(0);
-  const ok = SendMessageTimeoutW(hwnd, msg, wParam, lParam || 0, SMTO_ABORTIFHUNG, 80, smResult);
-  if (!ok) return 0;
-  return Number(smResult.readBigUInt64LE(0));
+  const r = SendMessageTimeoutW(hwnd, msg, wParam, lParam || 0, SMTO_ABORTIFHUNG, 40, smResult);
+  if (!r) return { ok: false, value: 0 };
+  return { ok: true, value: Number(smResult.readBigUInt64LE(0)) };
 }
 const GetWindowThreadProcessId = user32.func(
   'uint32 __stdcall GetWindowThreadProcessId(void *hWnd, void *lpdwProcessId)',
@@ -128,7 +128,8 @@ function readItemName(s, index) {
     blob.writeBigUInt64LE(textAddr, 40);
     blob.writeInt32LE(260, 48);
     if (!WriteProcessMemory(s.proc, s.remote, blob, 600, null)) return '';
-    sendLv(s.lv, LVM_GETITEMTEXTW, index, s.remoteN + 16n);
+    const sent = sendLv(s.lv, LVM_GETITEMTEXTW, index, s.remoteN + 16n);
+    if (!sent.ok) return '';
     blob.fill(0);
     if (!ReadProcessMemory(s.proc, s.remote, blob, 600, null)) return '';
     const text = blob.slice(80);
@@ -145,15 +146,15 @@ export function fetchIconRects() {
     try { SetThreadDpiAwarenessContext(-4); } catch { /* older Windows */ }
     const s = ensureSess();
     if (!s) return null;
-    const count = Number(sendLv(s.lv, LVM_GETITEMCOUNT, 0, 0));
-    if (!count || count < 1) {
+    const cnt = sendLv(s.lv, LVM_GETITEMCOUNT, 0, 0);
+    if (!cnt.ok || cnt.value < 1) {
       dropSess();
       return null;
     }
     if (!GetWindowRect(s.lv, wrBuf)) return null;
     const wrL = wrBuf.readInt32LE(0);
     const wrT = wrBuf.readInt32LE(4);
-    const n = Math.min(count, 200);
+    const n = Math.min(cnt.value, 80);
     const out = [];
     for (let i = 0; i < n; i++) {
       init.writeInt32LE(LVIR_ICON, 0);
@@ -162,7 +163,11 @@ export function fetchIconRects() {
         dropSess();
         return null;
       }
-      sendLv(s.lv, LVM_GETITEMRECT, i, s.remoteN);
+      const rect = sendLv(s.lv, LVM_GETITEMRECT, i, s.remoteN);
+      if (!rect.ok) {
+        dropSess();
+        return out.length ? out : null;
+      }
       if (!ReadProcessMemory(s.proc, s.remote, buf, 16, null)) continue;
       const l = buf.readInt32LE(0);
       const t = buf.readInt32LE(4);
