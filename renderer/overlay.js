@@ -2969,7 +2969,13 @@ if (api) {
         if (breed) checkClear();
       }
     }
-    if (d.name === 'addFly') spawnFromEdge(1, { morph: d.morph, sex: d.sex });
+    if (d.name === 'addFly') {
+      const opts = { morph: d.morph, sex: d.sex };
+      if (!d.morph) {
+        opts.geneG = Math.random() < 0.5 ? 2 : (Math.random() < 0.5 ? 0 : 1);
+      }
+      spawnFromEdge(1, opts);
+    }
     if (d.name === 'scareAll') scareAll(performance.now());
     if (d.name === 'boot') boot();
     if (d.name === 'startFresh') startFresh();
