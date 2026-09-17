@@ -89,6 +89,12 @@
       cursor: pointer;
     }
     .foot input { margin: 0; accent-color: var(--ink); }
+    .note {
+      margin: -2px 0 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
     #gate { display: none; }
     body.gate main > :not(#gate) { display: none; }
     body.gate #gate { display: block; }
@@ -108,6 +114,7 @@
     <button id="xray" type="button">全图透视</button>
     <button class="primary" id="swatter" type="button">拿出苍蝇拍</button>
     <button id="rag" type="button">拿出抹布</button>
+    <p class="note">按 Esc 退出</p>
     <div class="row">
       <button id="sexF" type="button">雌</button>
       <button id="sexM" type="button" class="on">雄</button>

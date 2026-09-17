@@ -31,7 +31,7 @@ function render(s) {
   $('xray').classList.toggle('on', watch);
   $('xray').textContent = watch ? '透视中' : '全图透视';
   $('fast').classList.toggle('on', fast);
-  $('fast').textContent = fast ? '快进中' : '快进';
+  $('fast').textContent = fast ? '快进中 · 约 1.5 秒一档' : '快进 · 约 1.5 秒一档';
   $('autoStart').checked = autoStart;
   if (on) {
     $('hint').textContent = '拍子跟着鼠标。左键打。Esc 还鼠标；点退出或关窗口随时能关。';
