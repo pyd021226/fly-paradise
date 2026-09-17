@@ -29,6 +29,10 @@ const DESKTOP = new Set([
   'SHELLDLL_DefView',
   'SysListView32',
   '#32769',
+  'XamlExplorerHostIslandWindow',
+  'Windows.UI.Composition.DesktopWindowContentBridge',
+  'Microsoft.UI.Content.DesktopChildSiteBridge',
+  'Windows.UI.Input.InputSite.WindowClass',
 ]);
 
 function hwndVal(h) {
