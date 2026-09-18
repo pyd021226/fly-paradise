@@ -386,7 +386,6 @@ if (jarCv) {
   jarCv.onclick = null;
 }
 if ($('jarAll')) $('jarAll').onclick = () => api.send('jarSelectAll');
-if ($('jarKill')) $('jarKill').onclick = () => api.send('jarKillSel');
 if ($('jarFree')) $('jarFree').onclick = () => api.send('jarFreeSel');
 
 if (api.onBottle) {

@@ -1837,22 +1837,6 @@ function catchNet(now) {
     f.state = 'dead';
   }
   flies = flies.filter((f) => f.state !== 'dead');
-  eggs = eggs.filter((e) => {
-    if (!inNet(e.x, e.y)) return true;
-    intoJar('egg', e);
-    return false;
-  });
-  larvae = larvae.filter((L) => {
-    if (!inNet(L.x, L.y)) return true;
-    interruptEat(L);
-    intoJar('larva', L);
-    return false;
-  });
-  pupae = pupae.filter((p) => {
-    if (!inNet(p.x, p.y)) return true;
-    intoJar('pupa', p);
-    return false;
-  });
 }
 
 function bounceJar(u) {
@@ -1866,7 +1850,13 @@ function bounceJar(u) {
 
 function stepJar(dt, now) {
   for (const u of jar) {
+    if (u.dead) continue;
     u.inMs = (u.inMs || 0) + dt * 1000;
+    if (u.inMs >= JAR_DIE_MS) {
+      u.dead = true;
+      jarSel.delete(u.id);
+      continue;
+    }
     if (u.kind === 'fly') {
       if (now > (u.turnT || 0)) {
         u.turnT = now + rand(300, 1000);
@@ -1900,7 +1890,6 @@ function stepJar(dt, now) {
       }
     }
   }
-  jar = jar.filter((u) => (u.inMs || 0) < JAR_DIE_MS);
   pruneJarSel();
 }
 
@@ -1910,8 +1899,10 @@ function publishJar() {
 }
 
 function pruneJarSel() {
-  const ids = new Set(jar.map((u) => u.id));
-  for (const id of [...jarSel]) if (!ids.has(id)) jarSel.delete(id);
+  for (const id of [...jarSel]) {
+    const u = jar.find((x) => x.id === id);
+    if (!u || u.dead) jarSel.delete(id);
+  }
 }
 
 function jarKill(id) {
@@ -1929,7 +1920,7 @@ function jarKillSel() {
 }
 
 function jarSelectAll() {
-  jarSel = new Set(jar.map((u) => u.id));
+  jarSel = new Set(jar.filter((u) => !u.dead).map((u) => u.id));
   publishJar();
 }
 
@@ -1941,7 +1932,7 @@ function jarFreeSel() {
 
 function jarFree(id) {
   const u = jar.find((x) => x.id === id);
-  if (!u) return;
+  if (!u || u.dead) return;
   if (u.kind === 'fly' && !canAddAdult()) {
     jarHint = '成虫已满 12，放不出。';
     publishJar();
@@ -2041,12 +2032,19 @@ function drawBottle(now) {
   for (const u of jar) {
     ctx.save();
     if (u.kind === 'fly') {
-      drawFly({
-        x: u.x, y: u.y, scale: (u.scale || 1) * 1.5, sex: u.sex,
-        visHead: u.heading, heading: u.heading, state: 'fly',
-        seed: u.seed, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG,
-        geneX: u.geneX, geneY: u.geneY, crawling: false, mateRole: 0,
-      }, now);
+      if (u.dead) {
+        drawCorpse({
+          x: u.x, y: u.y, heading: u.heading, seed: u.seed, scale: (u.scale || 1) * 1.5,
+          sex: u.sex, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG, geneX: u.geneX, geneY: u.geneY,
+        });
+      } else {
+        drawFly({
+          x: u.x, y: u.y, scale: (u.scale || 1) * 1.5, sex: u.sex,
+          visHead: u.heading, heading: u.heading, state: 'fly',
+          seed: u.seed, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG,
+          geneX: u.geneX, geneY: u.geneY, crawling: false, mateRole: 0,
+        }, now);
+      }
     } else if (u.kind === 'egg') {
       ctx.translate(u.x, u.y);
       ctx.scale(1.5, 1.5);
@@ -2113,6 +2111,7 @@ function bottleAt(x, y) {
   let best = null;
   let bd = 16;
   for (const u of jar) {
+    if (u.dead) continue;
     const d = Math.hypot(u.x - jx, u.y - jy);
     if (d < bd) { bd = d; best = u; }
   }

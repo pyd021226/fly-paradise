@@ -648,7 +648,7 @@ if (!app.requestSingleInstanceLock()) {
         applyTool();
       } else if (name === 'jarKill' || name === 'jarFree') {
         send('cmd', { name, id: msg.id });
-      } else if (name === 'jarSelectAll' || name === 'jarKillSel' || name === 'jarFreeSel') {
+      } else if (name === 'jarSelectAll' || name === 'jarFreeSel') {
         send('cmd', { name });
       } else if (name === 'capture') {
         captureOpen = !!(msg && msg.open);
