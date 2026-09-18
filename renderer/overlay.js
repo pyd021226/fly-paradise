@@ -1804,7 +1804,7 @@ function throwNet(now) {
   netCy = mouse.y;
   netFallAt = now + NET_FALL_MS;
   netSolidUntil = 0;
-  const mul = 1 + Math.random() * 0.5;
+  const mul = 2 + Math.random() * 2;
   const spd = CRUISE_SPD * mul;
   for (const f of flies) {
     if (f.state === 'dead') continue;
@@ -2498,7 +2498,7 @@ function step(dt, now) {
   if (netSolidUntil && now >= netSolidUntil) netSolidUntil = 0;
   stepJar(dt, now);
   jarAcc += dt;
-  if (jarAcc > 0.12) {
+  if (jarAcc > 0.016) {
     jarAcc = 0;
     publishJar();
   }

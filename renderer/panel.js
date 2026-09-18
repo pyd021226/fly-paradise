@@ -181,17 +181,51 @@ const jarCtx = jarCv ? jarCv.getContext('2d') : null;
 function jarDrawFly(u) {
   const pal = JAR_PAL[jarMorph(u)] || JAR_PAL.wild;
   const male = u.sex === 'm';
-  // wings
-  jarCtx.fillStyle = 'rgba(248,250,252,0.5)';
-  for (const side of [-1, 1]) {
+  const t = performance.now() * 0.001;
+  const seed = u.seed || 0;
+  const C = {
+    wing: 'rgba(248,250,252,0.5)',
+    vein: 'rgba(70,70,70,0.4)',
+    eye: '#d44532',
+    eyeDark: '#7a1810',
+    eyeHi: '#f4a090',
+  };
+  // shadow
+  jarCtx.fillStyle = 'rgba(0,0,0,0.16)';
+  jarCtx.beginPath();
+  jarCtx.ellipse(0.4, 4.0, 2.4, 1.1, 0, 0, Math.PI * 2);
+  jarCtx.fill();
+  // wings (flying)
+  const wing = (side, ang) => {
     jarCtx.save();
-    jarCtx.translate(side * 1.5, 0.2);
-    jarCtx.rotate(side * 0.6);
+    jarCtx.translate(side * 1.5, 0.22);
+    jarCtx.rotate(side * ang);
+    jarCtx.fillStyle = C.wing;
+    jarCtx.strokeStyle = C.vein;
+    jarCtx.lineWidth = 0.35;
     jarCtx.beginPath();
-    jarCtx.ellipse(side * 1.6, -0.5, 1.6, 0.8, 0, 0, Math.PI * 2);
+    jarCtx.moveTo(0, 0);
+    jarCtx.bezierCurveTo(side * 2.2, -1.15, side * 4.5, -0.75, side * 5.15, 0.12);
+    jarCtx.bezierCurveTo(side * 4.6, 1.15, side * 2.0, 1.25, side * 0.2, 0.4);
+    jarCtx.closePath();
     jarCtx.fill();
+    jarCtx.stroke();
+    jarCtx.beginPath();
+    jarCtx.moveTo(0, 0);
+    jarCtx.quadraticCurveTo(side * 3.0, -0.12, side * 4.9, 0.16);
+    jarCtx.stroke();
     jarCtx.restore();
-  }
+  };
+  const a0 = 0.12 + 0.5 * Math.sin(t * 0.55 + seed);
+  jarCtx.globalAlpha = 0.28;
+  wing(-1, a0 + 0.9);
+  wing(1, a0 + 0.9);
+  jarCtx.globalAlpha = 0.18;
+  wing(-1, a0 + 1.8);
+  wing(1, a0 + 1.8);
+  jarCtx.globalAlpha = 1;
+  wing(-1, a0);
+  wing(1, a0);
   // abdomen
   jarCtx.fillStyle = pal.abdomen;
   jarCtx.beginPath();
@@ -201,10 +235,18 @@ function jarDrawFly(u) {
   jarCtx.closePath();
   jarCtx.fill();
   if (male) {
+    jarCtx.save();
+    jarCtx.beginPath();
+    jarCtx.moveTo(-0.55, 1.7);
+    jarCtx.bezierCurveTo(-1.85, 2.5, -1.65, 4.2, 0, 5.35);
+    jarCtx.bezierCurveTo(1.65, 4.2, 1.85, 2.5, 0.55, 1.7);
+    jarCtx.closePath();
+    jarCtx.clip();
     jarCtx.fillStyle = '#140c08';
     jarCtx.beginPath();
     jarCtx.ellipse(0, 4.55, 1.7, 1.45, 0, 0, Math.PI * 2);
     jarCtx.fill();
+    jarCtx.restore();
   }
   jarCtx.strokeStyle = pal.band;
   jarCtx.lineWidth = 0.45;
@@ -224,6 +266,12 @@ function jarDrawFly(u) {
   jarCtx.beginPath();
   jarCtx.ellipse(0, 0.4, 1.65, 1.35, 0, 0, Math.PI * 2);
   jarCtx.fill();
+  jarCtx.fillStyle = pal.thoraxDark;
+  jarCtx.globalAlpha = 0.35;
+  jarCtx.beginPath();
+  jarCtx.ellipse(0, 0.3, 0.95, 0.9, 0, 0, Math.PI * 2);
+  jarCtx.fill();
+  jarCtx.globalAlpha = 1;
   // head
   jarCtx.fillStyle = pal.head;
   jarCtx.beginPath();
@@ -232,9 +280,23 @@ function jarDrawFly(u) {
   jarCtx.beginPath();
   jarCtx.ellipse(0, -1.85, 0.88, 0.74, 0, 0, Math.PI * 2);
   jarCtx.fill();
+  // antennae
+  jarCtx.strokeStyle = '#5a3a18';
+  jarCtx.lineWidth = 0.28;
+  jarCtx.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    jarCtx.beginPath();
+    jarCtx.moveTo(side * 0.3, -2.45);
+    jarCtx.lineTo(side * 0.62, -3.05);
+    jarCtx.stroke();
+  }
   // eyes
   for (const side of [-1, 1]) {
-    jarCtx.fillStyle = '#d44532';
+    const g = jarCtx.createRadialGradient(side * 0.5, -2.0, 0.12, side * 0.62, -1.85, 0.78);
+    g.addColorStop(0, C.eyeHi);
+    g.addColorStop(0.45, C.eye);
+    g.addColorStop(1, C.eyeDark);
+    jarCtx.fillStyle = g;
     jarCtx.beginPath();
     jarCtx.ellipse(side * 0.7, -1.88, 0.58, 0.64, side * 0.18, 0, Math.PI * 2);
     jarCtx.fill();
@@ -284,16 +346,18 @@ function drawJar() {
       jarCtx.lineWidth = 0.8;
       jarCtx.stroke();
     } else {
-      jarCtx.scale(2.2, 2.2);
+      jarCtx.save();
+      jarCtx.scale(2.4, 2.4);
       jarCtx.rotate(u.heading || 0);
       jarDrawFly(u);
+      jarCtx.restore();
     }
     if (jarSel.has(u.id)) {
       jarCtx.setLineDash([]);
       jarCtx.strokeStyle = '#ffffff';
       jarCtx.lineWidth = 1.5;
       jarCtx.beginPath();
-      jarCtx.arc(0, 0, 13, 0, Math.PI * 2);
+      jarCtx.arc(0, 0, 14, 0, Math.PI * 2);
       jarCtx.stroke();
     }
     jarCtx.restore();
