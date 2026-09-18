@@ -19,39 +19,14 @@
       font: 14px/1.45 "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
       user-select: none;
     }
-    .layout { display: flex; min-height: 100%; }
-    main { padding: 18px 16px 16px; width: 300px; box-sizing: border-box; flex: 0 0 300px; }
-    .jar-col {
-      width: 240px;
-      flex: 0 0 240px;
-      box-sizing: border-box;
-      padding: 18px 14px 16px;
-      border-left: 1px solid var(--line);
-      display: flex;
-      flex-direction: column;
-    }
-    .jar-col h1 { font-size: 17px; font-weight: 650; margin: 0 0 6px; }
-    #jar {
-      width: 212px;
-      height: 360px;
-      background: linear-gradient(#eef7fa, #cfe0e8);
-      border: 2px solid #8eafbc;
-      border-radius: 22px 22px 14px 14px;
-      display: block;
-    }
-    .jar-note {
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
-      margin: 0 0 10px;
-    }
+    .layout { display: block; }
+    main { padding: 18px 16px 16px; }
     .jar-msg {
-      min-height: 1.4em;
+      min-height: 1.2em;
       font-size: 12px;
       color: var(--pink);
-      margin: 8px 0 0;
+      margin: 0 0 8px;
     }
-    body.gate .jar-col { display: none; }
     h1 {
       font-size: 17px;
       font-weight: 650;
@@ -168,6 +143,14 @@
     <button id="rag" type="button">拿出抹布</button>
     <button id="net" type="button">拿出捕网</button>
     <p class="note">按 Esc 退出</p>
+    <p class="jar-msg" id="jarMsg"></p>
+    <div class="row">
+      <button id="jarAll" type="button">瓶内全选</button>
+    </div>
+    <div class="row">
+      <button id="jarKill" type="button">杀死选中</button>
+      <button id="jarFree" type="button">放回选中</button>
+    </div>
     <div class="add-row">
       <button id="add" type="button">加一只</button>
       <label><input id="sexF" type="checkbox">雌</label>
@@ -178,17 +161,6 @@
     <button id="quit" type="button">退出</button>
     <label class="foot"><input id="autoStart" type="checkbox">开机启动</label>
   </main>
-  <aside class="jar-col">
-    <h1>玻璃瓶</h1>
-    <p class="jar-note">瓶中连续待满 2 分钟会死亡。蛹会羽化；不进食、不交配、不长大。</p>
-    <canvas id="jar" width="212" height="360"></canvas>
-    <p class="jar-msg" id="jarMsg"></p>
-    <div class="row">
-      <button id="jarAll" type="button">全选</button>
-    </div>
-    <button id="jarKill" type="button">杀死</button>
-    <button id="jarFree" type="button">放回桌面</button>
-  </aside>
 </div>
   <script src="./panel.js"></script>
 </body>

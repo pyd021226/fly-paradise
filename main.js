@@ -191,6 +191,10 @@ function applyTool() {
   send('rag', { on: ragOn, raw: ragOn && raw });
   send('net', { on: netOn, raw: netOn && raw });
   publishState();
+  if (!on) {
+    bottlePrev = false;
+    applyBottleHover();
+  }
 }
 
 function createOverlay(b) {
@@ -241,10 +245,10 @@ function createOverlay(b) {
 
 function createPanel() {
   const win = new BrowserWindow({
-    width: 540,
+    width: 300,
     height: 640,
     useContentSize: true,
-    minWidth: 480,
+    minWidth: 260,
     minHeight: 320,
     resizable: true,
     minimizable: true,
@@ -459,16 +463,50 @@ function publishIcons() {
 }
 
 let prevCursor = null;
+let bottleHover = false;
+let bottlePrev = false;
+
+function bottleRect() {
+  if (!overlay || overlay.isDestroyed()) return null;
+  const ob = overlay.getBounds();
+  let px = ob.x + ob.width;
+  let py = ob.y;
+  if (panel && !panel.isDestroyed()) {
+    const pb = panel.getBounds();
+    px = pb.x + pb.width + 8;
+    py = pb.y;
+  }
+  return { x: px - ob.x, y: py - ob.y, w: 260, h: 440 };
+}
+
+function sendBottleRect() {
+  const r = bottleRect();
+  if (r) send('bottle', r);
+}
+
+function applyBottleHover() {
+  if (toolOn()) return;
+  if (!overlay || overlay.isDestroyed()) return;
+  overlay.setFocusable(bottleHover);
+  overlay.setIgnoreMouseEvents(!bottleHover);
+}
 
 function pollMouse() {
   if (!overlay || overlay.isDestroyed()) return;
-  if (!toolOn() && !watch && !cursorOnDesktop(overlay, panel)) {
+  const b = overlay.getBounds();
+  const c = screen.getCursorScreenPoint();
+  const r = bottleRect();
+  const overBottle = !!(r && c.x - b.x >= r.x && c.x - b.x <= r.x + r.w && c.y - b.y >= r.y && c.y - b.y <= r.y + r.h);
+  bottleHover = overBottle && !toolOn();
+  if (bottleHover !== bottlePrev) {
+    bottlePrev = bottleHover;
+    applyBottleHover();
+  }
+  if (!toolOn() && !watch && !bottleHover && !cursorOnDesktop(overlay, panel)) {
     prevCursor = null;
     send('ambient', { mouse: { x: -9999, y: -9999, vx: 0, vy: 0 }, grabbing: false });
     return;
   }
-  const b = overlay.getBounds();
-  const c = screen.getCursorScreenPoint();
   let vx = 0;
   let vy = 0;
   if (prevCursor) {
@@ -528,6 +566,7 @@ if (!app.requestSingleInstanceLock()) {
       send('cmd', { name: 'configure', annoy: isAnnoy, watch, breed });
       if (!gate) send('cmd', { name: 'startFresh' });
       applyLayer();
+      sendBottleRect();
     });
     overlay.on('resize', publishGeometry);
     overlay.on('move', publishGeometry);
@@ -535,6 +574,8 @@ if (!app.requestSingleInstanceLock()) {
     panel = createPanel();
     panel.once('ready-to-show', () => panel.show());
     panel.show();
+    panel.on('move', sendBottleRect);
+    panel.on('resize', sendBottleRect);
 
     setTimeout(() => {
       if (!overlay || overlay.isDestroyed()) return;

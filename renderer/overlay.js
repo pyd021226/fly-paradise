@@ -236,6 +236,8 @@ let netCy = 0;
 let jar = [];
 let jarAcc = 0;
 let jarHint = '';
+let jarSel = new Set();
+let bottle = null;
 let rawMove = false;
 let paused = false;
 let fast = false;
@@ -1898,37 +1900,41 @@ function stepJar(dt, now) {
     }
   }
   jar = jar.filter((u) => (u.inMs || 0) < JAR_DIE_MS);
+  pruneJarSel();
 }
 
 function publishJar() {
   if (!window.fly || !window.fly.sendBottle) return;
-  window.fly.sendBottle({
-    w: JAR_W,
-    h: JAR_H,
-    hint: jarHint,
-    units: jar.map((u) => ({
-      id: u.id,
-      kind: u.kind,
-      x: u.x,
-      y: u.y,
-      heading: u.heading,
-      sex: u.sex,
-      instar: u.instar,
-      geneD: u.geneD,
-      geneP: u.geneP,
-      geneG: u.geneG,
-      geneX: u.geneX,
-      geneY: u.geneY,
-      seed: u.seed,
-      scale: u.scale,
-      inMs: u.inMs || 0,
-    })),
-  });
+  window.fly.sendBottle({ hint: jarHint, count: jar.length });
+}
+
+function pruneJarSel() {
+  const ids = new Set(jar.map((u) => u.id));
+  for (const id of [...jarSel]) if (!ids.has(id)) jarSel.delete(id);
 }
 
 function jarKill(id) {
   jar = jar.filter((u) => u.id !== id);
+  jarSel.delete(id);
   jarHint = '';
+  publishJar();
+}
+
+function jarKillSel() {
+  for (const id of [...jarSel]) jar = jar.filter((u) => u.id !== id);
+  jarSel = new Set();
+  jarHint = '';
+  publishJar();
+}
+
+function jarSelectAll() {
+  jarSel = new Set(jar.map((u) => u.id));
+  publishJar();
+}
+
+function jarFreeSel() {
+  for (const id of [...jarSel]) jarFree(id);
+  jarSel = new Set();
   publishJar();
 }
 
@@ -2000,6 +2006,113 @@ function drawNet(now) {
   ctx.arc(cx, cy, NET_R, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
+}
+
+function drawBottle(now) {
+  if (!bottle) return;
+  const b = bottle;
+  const pad = 12;
+  const spaceScale = (b.w - pad * 2) / JAR_W;
+  const spaceScaleY = (b.h - pad * 2) / JAR_H;
+  // glass
+  ctx.save();
+  ctx.fillStyle = 'rgba(210,235,244,0.30)';
+  ctx.strokeStyle = 'rgba(120,170,190,0.85)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(b.x + 10, b.y);
+  ctx.lineTo(b.x + b.w - 10, b.y);
+  ctx.quadraticCurveTo(b.x + b.w, b.y, b.x + b.w, b.y + 10);
+  ctx.lineTo(b.x + b.w, b.y + b.h - 16);
+  ctx.quadraticCurveTo(b.x + b.w, b.y + b.h - 6, b.x + b.w - 12, b.y + b.h - 6);
+  ctx.lineTo(b.x + 12, b.y + b.h - 6);
+  ctx.quadraticCurveTo(b.x, b.y + b.h - 6, b.x, b.y + b.h - 16);
+  ctx.lineTo(b.x, b.y + 10);
+  ctx.quadraticCurveTo(b.x, b.y, b.x + 10, b.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+  // creatures (reuse desktop model)
+  ctx.save();
+  ctx.translate(b.x + pad, b.y + pad);
+  ctx.scale(spaceScale, spaceScaleY);
+  for (const u of jar) {
+    ctx.save();
+    if (u.kind === 'fly') {
+      drawFly({
+        x: u.x, y: u.y, scale: (u.scale || 1) * 1.5, sex: u.sex,
+        visHead: u.heading, heading: u.heading, state: 'fly',
+        seed: u.seed, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG,
+        geneX: u.geneX, geneY: u.geneY, crawling: false, mateRole: 0,
+      }, now);
+    } else if (u.kind === 'egg') {
+      ctx.translate(u.x, u.y);
+      ctx.scale(1.5, 1.5);
+      ctx.rotate(u.heading);
+      ctx.fillStyle = '#f4f1e8';
+      ctx.strokeStyle = 'rgba(180,170,150,0.7)';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, (ADULT_LEN / 5) * 0.5, (ADULT_LEN / 5) * 0.22, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (u.kind === 'larva') {
+      ctx.translate(u.x, u.y);
+      ctx.scale(1.5, 1.5);
+      ctx.rotate(u.heading);
+      const len = larvaLen(u.instar || 1);
+      const thick = 1.1 + (u.instar || 1) * 0.55;
+      ctx.fillStyle = u.instar === 1 ? '#f3eee3' : u.instar === 2 ? '#e6dcc8' : '#d9cbb0';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, len * 0.5, thick, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(120,100,80,0.25)';
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+    } else if (u.kind === 'pupa') {
+      ctx.translate(u.x, u.y);
+      ctx.scale(1.5, 1.5);
+      ctx.rotate(u.heading);
+      const uu = clamp((now - u.t) / pupaMs(), 0, 1);
+      const r = 245 + (92 - 245) * uu;
+      const g = 240 + (58 - 240) * uu;
+      const bb = 220 + (28 - 220) * uu;
+      ctx.fillStyle = `rgb(${r | 0},${g | 0},${bb | 0})`;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 9, 3.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(40,20,10,0.35)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+    if (jarSel.has(u.id)) {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 14, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function bottleAt(x, y) {
+  if (!bottle) return null;
+  const b = bottle;
+  const pad = 12;
+  const spaceScale = (b.w - pad * 2) / JAR_W;
+  const spaceScaleY = (b.h - pad * 2) / JAR_H;
+  const jx = (x - b.x - pad) / spaceScale;
+  const jy = (y - b.y - pad) / spaceScaleY;
+  let best = null;
+  let bd = 16;
+  for (const u of jar) {
+    const d = Math.hypot(u.x - jx, u.y - jy);
+    if (d < bd) { bd = d; best = u; }
+  }
+  return best;
 }
 
 function larvaLen(instar) {
@@ -3319,6 +3432,7 @@ function draw(now) {
     drawRagWash();
   }
   if (netOn || netSolidUntil) drawNet(now);
+  drawBottle(now);
   drawFanfare(now);
 }
 
@@ -3579,7 +3693,16 @@ addEventListener('pointermove', (e) => {
 }, { passive: true });
 
 addEventListener('pointerdown', (e) => {
-  if (!swatterOn && !ragOn && !netOn) return;
+  if (!swatterOn && !ragOn && !netOn) {
+    if (bottle) {
+      const u = bottleAt(e.clientX, e.clientY);
+      if (u) {
+        if (jarSel.has(u.id)) jarSel.delete(u.id);
+        else jarSel.add(u.id);
+      }
+    }
+    return;
+  }
   trackTool(e.clientX, e.clientY);
   if (netOn) { throwNet(performance.now()); return; }
   if (swatterOn) swatAt(performance.now());
@@ -3694,6 +3817,12 @@ if (api) {
       if (netOn) { swatterOn = false; ragOn = false; }
     });
   }
+  if (api.onBottle) {
+    api.onBottle((d) => {
+      if (d && d.x != null) bottle = { x: d.x, y: d.y, w: d.w, h: d.h };
+      if (d && d.hint != null) jarHint = d.hint;
+    });
+  }
   api.onSwatterMove?.((d) => {
     if (!swatterOn && !ragOn && !netOn) return;
     if (d.x == null || d.y == null) return;
@@ -3714,6 +3843,9 @@ if (api) {
     }
     if (d.name === 'jarKill') jarKill(d.id);
     if (d.name === 'jarFree') jarFree(d.id);
+    if (d.name === 'jarSelectAll') jarSelectAll();
+    if (d.name === 'jarKillSel') jarKillSel();
+    if (d.name === 'jarFreeSel') jarFreeSel();
     if (d.name === 'breed') {
       if (!flavorAnnoy) {
         breed = !!d.value;

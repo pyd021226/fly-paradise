@@ -368,50 +368,16 @@ function drawJar() {
 }
 
 if (jarCv) {
-  jarCv.onclick = (e) => {
-    const r = jarCv.getBoundingClientRect();
-    const px = (e.clientX - r.left) * (jarCv.width / r.width);
-    const py = (e.clientY - r.top) * (jarCv.height / r.height);
-    const sx = jarCv.width / (jarState.w || 180);
-    const sy = jarCv.height / (jarState.h || 320);
-    let best = 0;
-    let bd = 22;
-    for (const u of jarState.units || []) {
-      const d = Math.hypot(u.x * sx - px, u.y * sy - py);
-      if (d < bd) { bd = d; best = u.id; }
-    }
-    if (best) {
-      if (jarSel.has(best)) jarSel.delete(best);
-      else jarSel.add(best);
-    }
-    drawJar();
-  };
+  jarCv.onclick = null;
 }
-if ($('jarAll')) $('jarAll').onclick = () => {
-  jarSel = new Set((jarState.units || []).map((u) => u.id));
-  drawJar();
-};
-if ($('jarKill')) $('jarKill').onclick = () => {
-  const ids = [...jarSel];
-  if (ids.length) {
-    for (const id of ids) api.send('jarKill', { id });
-    jarSel = new Set();
-  }
-};
-if ($('jarFree')) $('jarFree').onclick = () => {
-  const ids = [...jarSel];
-  if (ids.length) {
-    for (const id of ids) api.send('jarFree', { id });
-    jarSel = new Set();
-  }
-};
+if ($('jarAll')) $('jarAll').onclick = () => api.send('jarSelectAll');
+if ($('jarKill')) $('jarKill').onclick = () => api.send('jarKillSel');
+if ($('jarFree')) $('jarFree').onclick = () => api.send('jarFreeSel');
 
 if (api.onBottle) {
   api.onBottle((d) => {
-    jarState = d || jarState;
-    const alive = new Set((jarState.units || []).map((u) => u.id));
-    for (const id of [...jarSel]) if (!alive.has(id)) jarSel.delete(id);
-    drawJar();
+    const msg = $('jarMsg');
+    if (msg) msg.textContent = (d && d.hint) || '';
   });
 }
 
