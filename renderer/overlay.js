@@ -44,7 +44,7 @@ const DRY_MAX_MIN = 20;
 const RAG_MAX = 10000;
 const RAG_WASH_MS = 5 * 60 * 1000;
 const NET_R = 84;
-const NET_FALL_MS = 200;
+const NET_FALL_MS = 100;
 const JAR_DIE_MS = 2 * 60 * 1000;
 const JAR_W = 180;
 const JAR_H = 320;
@@ -1795,7 +1795,7 @@ function throwNet(now) {
   netCy = mouse.y;
   netFallAt = now + NET_FALL_MS;
   netSolidUntil = 0;
-  const mul = 2 + Math.random() * 6;
+  const mul = 1 + Math.random() * 3;
   const spd = CRUISE_SPD * mul;
   for (const f of flies) {
     if (f.state === 'dead') continue;

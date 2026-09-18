@@ -150,8 +150,13 @@ if (api.onLife) {
   });
 }
 
-const JAR_COL = {
-  wild: '#d4a056', mid: '#aa743c', deep: '#4a2c12', white: '#f3eee4', green: '#1aa85a', rainbow: '#e23d7a',
+const JAR_PAL = {
+  wild: { thorax: '#d4a056', thoraxDark: '#b07a38', abdomen: '#ead7aa', band: '#2e2014', head: '#c48a48', leg: '#c6a66c' },
+  mid: { thorax: '#aa743c', thoraxDark: '#c49050', abdomen: '#c8a878', band: '#3a2410', head: '#8e5c28', leg: '#966834' },
+  deep: { thorax: '#4a2c12', thoraxDark: '#8a5a28', abdomen: '#6b4524', band: '#1a0e08', head: '#3a220e', leg: '#4a3218' },
+  white: { thorax: '#f3eee4', thoraxDark: '#d8d0c4', abdomen: '#fffcf6', band: '#6b6358', head: '#efe8dc', leg: '#c4b8a8' },
+  green: { thorax: '#1aa85a', thoraxDark: '#c8f080', abdomen: '#148a48', band: '#0d3a20', head: '#127a40', leg: '#1a5a32' },
+  rainbow: { thorax: '#e23d7a', thoraxDark: '#7a3dff', abdomen: '#3dd4e2', band: '#1a1030', head: '#f0c040', leg: '#6a4cff' },
 };
 
 function jarMorph(u) {
@@ -169,9 +174,72 @@ function jarMorph(u) {
 }
 
 let jarState = { w: 180, h: 320, units: [], hint: '' };
-let jarSel = 0;
+let jarSel = new Set();
 const jarCv = $('jar');
 const jarCtx = jarCv ? jarCv.getContext('2d') : null;
+
+function jarDrawFly(u) {
+  const pal = JAR_PAL[jarMorph(u)] || JAR_PAL.wild;
+  const male = u.sex === 'm';
+  // wings
+  jarCtx.fillStyle = 'rgba(248,250,252,0.5)';
+  for (const side of [-1, 1]) {
+    jarCtx.save();
+    jarCtx.translate(side * 1.5, 0.2);
+    jarCtx.rotate(side * 0.6);
+    jarCtx.beginPath();
+    jarCtx.ellipse(side * 1.6, -0.5, 1.6, 0.8, 0, 0, Math.PI * 2);
+    jarCtx.fill();
+    jarCtx.restore();
+  }
+  // abdomen
+  jarCtx.fillStyle = pal.abdomen;
+  jarCtx.beginPath();
+  jarCtx.moveTo(-0.55, 1.7);
+  jarCtx.bezierCurveTo(-1.85, 2.5, -1.65, 4.2, 0, 5.35);
+  jarCtx.bezierCurveTo(1.65, 4.2, 1.85, 2.5, 0.55, 1.7);
+  jarCtx.closePath();
+  jarCtx.fill();
+  if (male) {
+    jarCtx.fillStyle = '#140c08';
+    jarCtx.beginPath();
+    jarCtx.ellipse(0, 4.55, 1.7, 1.45, 0, 0, Math.PI * 2);
+    jarCtx.fill();
+  }
+  jarCtx.strokeStyle = pal.band;
+  jarCtx.lineWidth = 0.45;
+  for (let i = 0; i < 4; i++) {
+    const y = 2.25 + i * 0.68;
+    const w = 1.35 - i * 0.18;
+    jarCtx.beginPath();
+    jarCtx.moveTo(-w, y);
+    jarCtx.quadraticCurveTo(0, y + 0.2, w, y);
+    jarCtx.stroke();
+  }
+  // thorax
+  jarCtx.fillStyle = pal.thorax;
+  jarCtx.beginPath();
+  jarCtx.ellipse(0, 1.85, 0.48, 0.32, 0, 0, Math.PI * 2);
+  jarCtx.fill();
+  jarCtx.beginPath();
+  jarCtx.ellipse(0, 0.4, 1.65, 1.35, 0, 0, Math.PI * 2);
+  jarCtx.fill();
+  // head
+  jarCtx.fillStyle = pal.head;
+  jarCtx.beginPath();
+  jarCtx.ellipse(0, -1.15, 0.48, 0.36, 0, 0, Math.PI * 2);
+  jarCtx.fill();
+  jarCtx.beginPath();
+  jarCtx.ellipse(0, -1.85, 0.88, 0.74, 0, 0, Math.PI * 2);
+  jarCtx.fill();
+  // eyes
+  for (const side of [-1, 1]) {
+    jarCtx.fillStyle = '#d44532';
+    jarCtx.beginPath();
+    jarCtx.ellipse(side * 0.7, -1.88, 0.58, 0.64, side * 0.18, 0, Math.PI * 2);
+    jarCtx.fill();
+  }
+}
 
 function drawJar() {
   if (!jarCtx || !jarCv) return;
@@ -185,38 +253,47 @@ function drawJar() {
   for (const u of jarState.units || []) {
     const x = u.x * sx;
     const y = u.y * sy;
-    const col = JAR_COL[jarMorph(u)] || JAR_COL.wild;
     jarCtx.save();
     jarCtx.translate(x, y);
-    jarCtx.rotate(u.heading || 0);
-    jarCtx.fillStyle = col;
     if (u.kind === 'egg') {
+      jarCtx.rotate(u.heading || 0);
+      jarCtx.fillStyle = '#f4f1e8';
+      jarCtx.strokeStyle = 'rgba(180,170,150,0.7)';
+      jarCtx.lineWidth = 0.6;
       jarCtx.beginPath();
-      jarCtx.ellipse(0, 0, 4, 2, 0, 0, Math.PI * 2);
+      jarCtx.ellipse(0, 0, 4.5, 2, 0, 0, Math.PI * 2);
       jarCtx.fill();
+      jarCtx.stroke();
     } else if (u.kind === 'larva') {
+      jarCtx.rotate(u.heading || 0);
       const len = 5 + (u.instar || 1) * 3;
+      jarCtx.fillStyle = u.instar === 1 ? '#f3eee3' : u.instar === 2 ? '#e6dcc8' : '#d9cbb0';
       jarCtx.beginPath();
       jarCtx.ellipse(0, 0, len, 2.2, 0, 0, Math.PI * 2);
       jarCtx.fill();
+      jarCtx.strokeStyle = 'rgba(120,100,80,0.25)';
+      jarCtx.lineWidth = 0.7;
+      jarCtx.stroke();
     } else if (u.kind === 'pupa') {
+      jarCtx.rotate(u.heading || 0);
+      jarCtx.fillStyle = '#caa060';
       jarCtx.beginPath();
       jarCtx.ellipse(0, 0, 7, 3, 0, 0, Math.PI * 2);
       jarCtx.fill();
+      jarCtx.strokeStyle = 'rgba(40,20,10,0.35)';
+      jarCtx.lineWidth = 0.8;
+      jarCtx.stroke();
     } else {
-      jarCtx.beginPath();
-      jarCtx.ellipse(0, 0, 6, 3.2, 0, 0, Math.PI * 2);
-      jarCtx.fill();
-      jarCtx.fillStyle = '#222';
-      jarCtx.beginPath();
-      jarCtx.arc(-4, 0, 1.4, 0, Math.PI * 2);
-      jarCtx.fill();
+      jarCtx.scale(2.2, 2.2);
+      jarCtx.rotate(u.heading || 0);
+      jarDrawFly(u);
     }
-    if (u.id === jarSel) {
+    if (jarSel.has(u.id)) {
+      jarCtx.setLineDash([]);
       jarCtx.strokeStyle = '#ffffff';
-      jarCtx.lineWidth = 2;
+      jarCtx.lineWidth = 1.5;
       jarCtx.beginPath();
-      jarCtx.arc(0, 0, 11, 0, Math.PI * 2);
+      jarCtx.arc(0, 0, 13, 0, Math.PI * 2);
       jarCtx.stroke();
     }
     jarCtx.restore();
@@ -238,17 +315,37 @@ if (jarCv) {
       const d = Math.hypot(u.x * sx - px, u.y * sy - py);
       if (d < bd) { bd = d; best = u.id; }
     }
-    jarSel = best;
+    if (best) {
+      if (jarSel.has(best)) jarSel.delete(best);
+      else jarSel.add(best);
+    }
     drawJar();
   };
 }
-if ($('jarKill')) $('jarKill').onclick = () => { if (jarSel) api.send('jarKill', { id: jarSel }); };
-if ($('jarFree')) $('jarFree').onclick = () => { if (jarSel) api.send('jarFree', { id: jarSel }); };
+if ($('jarAll')) $('jarAll').onclick = () => {
+  jarSel = new Set((jarState.units || []).map((u) => u.id));
+  drawJar();
+};
+if ($('jarKill')) $('jarKill').onclick = () => {
+  const ids = [...jarSel];
+  if (ids.length) {
+    for (const id of ids) api.send('jarKill', { id });
+    jarSel = new Set();
+  }
+};
+if ($('jarFree')) $('jarFree').onclick = () => {
+  const ids = [...jarSel];
+  if (ids.length) {
+    for (const id of ids) api.send('jarFree', { id });
+    jarSel = new Set();
+  }
+};
 
 if (api.onBottle) {
   api.onBottle((d) => {
     jarState = d || jarState;
-    if (jarSel && !(jarState.units || []).some((u) => u.id === jarSel)) jarSel = 0;
+    const alive = new Set((jarState.units || []).map((u) => u.id));
+    for (const id of [...jarSel]) if (!alive.has(id)) jarSel.delete(id);
     drawJar();
   });
 }
