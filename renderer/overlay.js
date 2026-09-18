@@ -62,12 +62,62 @@ function dryMin(stain) {
   return Math.min(DRY_MAX_MIN, Math.floor((stain.ageMs || 0) / 60000));
 }
 
+function dryAge(stain) {
+  return Math.min(DRY_MAX_MIN, (stain.ageMs || 0) / 60000);
+}
+
 function dryT(stain) {
-  return dryMin(stain) / DRY_MAX_MIN;
+  return dryAge(stain) / DRY_MAX_MIN;
 }
 
 function wipesNeed(stain) {
   return 1 + dryMin(stain);
+}
+
+function dryScale(stain) {
+  return 1 - 0.01 * dryAge(stain);
+}
+
+function parseRgb(c) {
+  if (typeof c !== 'string') return [80, 60, 40];
+  if (c[0] === '#' && c.length === 7) {
+    const n = parseInt(c.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  const m = c.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
+  return [80, 60, 40];
+}
+
+function rgbStr(c) {
+  return `rgb(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])})`;
+}
+
+function dryDarken(color, stain) {
+  const k = 1 - 0.015 * dryAge(stain);
+  const c = typeof color === 'string' ? parseRgb(color) : color;
+  return rgbStr([c[0] * k, c[1] * k, c[2] * k]);
+}
+
+function dryLighten(color, stain) {
+  const t = 0.01 * dryAge(stain);
+  const c = typeof color === 'string' ? parseRgb(color) : color;
+  return rgbStr([
+    c[0] + (228 - c[0]) * t,
+    c[1] + (208 - c[1]) * t,
+    c[2] + (188 - c[2]) * t,
+  ]);
+}
+
+function dimCol(stain) {
+  const k = 1 - 0.015 * dryAge(stain);
+  if (k >= 0.999) return;
+  for (const key of ['thorax', 'thoraxDark', 'abdomen', 'band', 'head', 'leg', 'eye', 'eyeDark', 'eyeHi']) {
+    const v = COL[key];
+    if (typeof v !== 'string' || v[0] !== '#') continue;
+    const c = parseRgb(v);
+    COL[key] = rgbStr([c[0] * k, c[1] * k, c[2] * k]);
+  }
 }
 
 function clutchSexes(n) {
@@ -82,18 +132,6 @@ function clutchSexes(n) {
     s[j] = t;
   }
   return s;
-}
-
-function paintDry(stain, rx, ry) {
-  const t = dryT(stain);
-  if (t <= 0) return;
-  ctx.save();
-  ctx.globalAlpha = t * 0.5;
-  ctx.fillStyle = '#140a06';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, rx * (1 - t * 0.12), ry * (1 - t * 0.18), 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
 }
 
 function isGenoGreen(u) {
@@ -2186,20 +2224,34 @@ function drawFood(f) {
 }
 
 function drawSplat(s) {
-  const t = dryT(s);
+  const m = dryAge(s);
+  const t = m / DRY_MAX_MIN;
+  const base = [
+    74 + (58 - 74) * t,
+    16 + (40 - 16) * t,
+    32 + (18 - 32) * t,
+  ];
+  const center = dryLighten(base, s);
+  const ring = dryDarken(base, s);
   ctx.save();
-  ctx.globalAlpha = 0.72 + t * 0.2;
-  const dark = Math.round(16 + (1 - t) * 42);
-  ctx.fillStyle = `rgb(${dark + 20},${Math.round(dark * 0.4)},${Math.round(dark * 0.5)})`;
   ctx.translate(s.x, s.y);
   ctx.rotate(s.seed);
-  const k = (s.scale || 1) * (1 - t * 0.28);
+  const k = s.scale || 1;
+  ctx.fillStyle = center;
   ctx.beginPath();
   ctx.ellipse(0, 0, 10 * k, 6 * k, 0.2, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
   ctx.ellipse(7 * k, -3 * k, 3 * k, 2 * k, 0.8, 0, Math.PI * 2);
   ctx.fill();
+  ctx.strokeStyle = ring;
+  ctx.lineWidth = 1.35 + t * 0.5;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 10 * k, 6 * k, 0.2, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(7 * k, -3 * k, 3 * k, 2 * k, 0.8, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -2649,21 +2701,23 @@ function drawFly(fly, now) {
 
 function drawDeadEgg(c) {
   const len = ADULT_LEN / 5;
+  const s = dryScale(c);
   ctx.save();
   ctx.translate(c.x, c.y);
   ctx.rotate(c.rot || 0);
-  ctx.fillStyle = '#c4b496';
-  ctx.strokeStyle = 'rgba(90,70,50,0.55)';
+  ctx.scale(s, s);
+  ctx.fillStyle = dryDarken('#c4b496', c);
+  ctx.strokeStyle = dryDarken('#5a4632', c);
   ctx.lineWidth = 0.6;
   ctx.beginPath();
   ctx.ellipse(0, 0.2, len * 0.52, len * 0.11, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = 'rgba(70,50,35,0.4)';
+  ctx.fillStyle = dryDarken('#463223', c);
+  ctx.globalAlpha = 0.4;
   ctx.beginPath();
   ctx.ellipse(-len * 0.08, 0.2, len * 0.16, len * 0.045, 0, 0, Math.PI * 2);
   ctx.fill();
-  paintDry(c, len * 0.6, len * 0.2);
   ctx.restore();
 }
 
@@ -2671,11 +2725,13 @@ function drawDeadLarva(c) {
   const instar = c.instar || 1;
   const len = larvaLen(instar);
   const thick = (1.1 + instar * 0.55) * (instar === 1 ? 0.55 : 0.78);
+  const s = dryScale(c);
+  const base = instar === 1 ? '#cbb89a' : instar === 2 ? '#b39470' : '#8a6e4c';
   ctx.save();
   ctx.translate(c.x, c.y);
-  ctx.scale(0.8, 0.8);
+  ctx.scale(0.8 * s, 0.8 * s);
   ctx.rotate(c.heading || 0);
-  ctx.fillStyle = instar === 1 ? '#cbb89a' : instar === 2 ? '#b39470' : '#8a6e4c';
+  ctx.fillStyle = dryDarken(base, c);
   if (instar === 1) {
     ctx.beginPath();
     ctx.ellipse(-len * 0.1, 0.45, len * 0.48, thick, 0.38, 0, Math.PI * 2);
@@ -2694,34 +2750,34 @@ function drawDeadLarva(c) {
       ctx.fill();
     }
   }
-  ctx.strokeStyle = 'rgba(70,50,30,0.4)';
+  ctx.strokeStyle = dryDarken('#46321e', c);
   ctx.lineWidth = 0.7;
   if (instar === 1) {
     ctx.beginPath();
     ctx.ellipse(-len * 0.1, 0.45, len * 0.48, thick, 0.38, 0, Math.PI * 2);
     ctx.stroke();
   }
-  paintDry(c, len * 0.55, thick * 2.2);
   ctx.restore();
 }
 
 function drawDeadPupa(c) {
+  const s = dryScale(c);
   ctx.save();
   ctx.translate(c.x, c.y);
-  ctx.scale(0.8, 0.8);
+  ctx.scale(0.8 * s, 0.8 * s);
   ctx.rotate(c.rot || 0);
-  ctx.fillStyle = '#4a2814';
+  ctx.fillStyle = dryDarken('#4a2814', c);
   ctx.beginPath();
   ctx.ellipse(0, 0.45, 8.4, 2.05, 0.1, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(20,8,4,0.5)';
+  ctx.strokeStyle = dryDarken('#140804', c);
   ctx.lineWidth = 0.8;
   ctx.stroke();
-  ctx.fillStyle = 'rgba(20,8,4,0.38)';
+  ctx.fillStyle = dryDarken('#140804', c);
+  ctx.globalAlpha = 0.38;
   ctx.beginPath();
   ctx.ellipse(-1.6, 0.35, 3.1, 0.85, 0.12, 0, Math.PI * 2);
   ctx.fill();
-  paintDry(c, 9, 3);
   ctx.restore();
 }
 
@@ -2749,12 +2805,13 @@ function drawCorpse(c) {
   COL.eyeHi = '#7a4038';
   COL.wing = 'rgba(180,170,150,0.35)';
   applyBody(c, c.sex === 'm', true, 0);
+  dimCol(c);
+  const s = dryScale(c);
   ctx.save();
   ctx.translate(c.x, c.y);
-  ctx.scale((c.scale || 1) * (4 / 3), (c.scale || 1) * (4 / 3));
+  ctx.scale((c.scale || 1) * (4 / 3) * s, (c.scale || 1) * (4 / 3) * s);
   ctx.rotate((c.heading || 0) + Math.PI / 2);
   drawSide(0, c.seed || 0, false);
-  paintDry(c, 4.2, 5.5);
   ctx.restore();
   Object.assign(COL, saved);
 }
