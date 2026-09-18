@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('fly', {
   onCmd: (cb) => ipcRenderer.on('cmd', (_e, d) => cb(d)),
   onSwatter: (cb) => ipcRenderer.on('swatter', (_e, d) => cb(d)),
   onRag: (cb) => ipcRenderer.on('rag', (_e, d) => cb(d)),
+  onNet: (cb) => ipcRenderer.on('net', (_e, d) => cb(d)),
+  sendBottle: (s) => ipcRenderer.send('bottle', s),
   onSwatterMove: (cb) => ipcRenderer.on('swatter-move', (_e, d) => cb(d)),
   onRetarget: (cb) => ipcRenderer.on('retarget', (_e, d) => cb(d)),
   putAway: () => ipcRenderer.send('swatter-off'),

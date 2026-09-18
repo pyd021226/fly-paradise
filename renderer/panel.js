@@ -55,6 +55,9 @@ function render(s) {
   btn.textContent = on ? '收起苍蝇拍' : '拿出苍蝇拍';
   btn.classList.toggle('on', on);
   paintRagBtn(rag);
+  const net = !!s.netOn;
+  $('net').classList.toggle('on', net);
+  $('net').textContent = net ? '收起捕网' : '拿出捕网';
   $('xray').classList.toggle('on', watch);
   $('xray').textContent = watch ? '透视中' : '全图透视';
   $('fast').classList.toggle('on', fast);
@@ -67,6 +70,8 @@ function render(s) {
   } else if (rag) {
     const wash = ragWashHint(lastLife);
     $('hint').textContent = wash || '抹布跟着鼠标。按住拖动能擦掉汁、尸体和空蛹壳。Esc 收起。';
+  } else if (net) {
+    $('hint').textContent = '捕网跟着鼠标，不惊动。点击后 0.2 秒落下，圈里活物进瓶。Esc 收起。';
   } else if (fast) {
     $('hint').textContent = '快进：成熟、进食、交配、卵、蛹大约 1.5 秒。';
   } else if (watch) {
@@ -93,6 +98,7 @@ $('rag').onclick = () => {
   if (ragWashing()) api.send('wash');
   else api.send('rag');
 };
+$('net').onclick = () => api.send('net');
 $('xray').onclick = () => api.send('xray');
 $('autoStart').onchange = () => api.send('autostart');
 $('resume').onclick = () => api.send('resume');
@@ -143,4 +149,108 @@ if (api.onLife) {
     }
   });
 }
+
+const JAR_COL = {
+  wild: '#d4a056', mid: '#aa743c', deep: '#4a2c12', white: '#f3eee4', green: '#1aa85a', rainbow: '#e23d7a',
+};
+
+function jarMorph(u) {
+  const dark = (u.geneD || 0) >= 2;
+  const mid = (u.geneP || 0) >= 2;
+  const green = (u.geneG || 0) >= 2;
+  if (dark && mid && green) {
+    if ((u.geneX || 0) >= 2 && (u.geneY || 0) >= 2) return 'rainbow';
+    return 'green';
+  }
+  if (dark && mid) return 'white';
+  if (dark) return 'deep';
+  if (mid) return 'mid';
+  return 'wild';
+}
+
+let jarState = { w: 180, h: 320, units: [], hint: '' };
+let jarSel = 0;
+const jarCv = $('jar');
+const jarCtx = jarCv ? jarCv.getContext('2d') : null;
+
+function drawJar() {
+  if (!jarCtx || !jarCv) return;
+  const w = jarCv.width;
+  const h = jarCv.height;
+  const sx = w / (jarState.w || 180);
+  const sy = h / (jarState.h || 320);
+  jarCtx.clearRect(0, 0, w, h);
+  jarCtx.fillStyle = 'rgba(255,255,255,0.28)';
+  jarCtx.fillRect(8, 8, w - 16, h - 16);
+  for (const u of jarState.units || []) {
+    const x = u.x * sx;
+    const y = u.y * sy;
+    const col = JAR_COL[jarMorph(u)] || JAR_COL.wild;
+    jarCtx.save();
+    jarCtx.translate(x, y);
+    jarCtx.rotate(u.heading || 0);
+    jarCtx.fillStyle = col;
+    if (u.kind === 'egg') {
+      jarCtx.beginPath();
+      jarCtx.ellipse(0, 0, 4, 2, 0, 0, Math.PI * 2);
+      jarCtx.fill();
+    } else if (u.kind === 'larva') {
+      const len = 5 + (u.instar || 1) * 3;
+      jarCtx.beginPath();
+      jarCtx.ellipse(0, 0, len, 2.2, 0, 0, Math.PI * 2);
+      jarCtx.fill();
+    } else if (u.kind === 'pupa') {
+      jarCtx.beginPath();
+      jarCtx.ellipse(0, 0, 7, 3, 0, 0, Math.PI * 2);
+      jarCtx.fill();
+    } else {
+      jarCtx.beginPath();
+      jarCtx.ellipse(0, 0, 6, 3.2, 0, 0, Math.PI * 2);
+      jarCtx.fill();
+      jarCtx.fillStyle = '#222';
+      jarCtx.beginPath();
+      jarCtx.arc(-4, 0, 1.4, 0, Math.PI * 2);
+      jarCtx.fill();
+    }
+    if (u.id === jarSel) {
+      jarCtx.strokeStyle = '#ffffff';
+      jarCtx.lineWidth = 2;
+      jarCtx.beginPath();
+      jarCtx.arc(0, 0, 11, 0, Math.PI * 2);
+      jarCtx.stroke();
+    }
+    jarCtx.restore();
+  }
+  const msg = $('jarMsg');
+  if (msg) msg.textContent = jarState.hint || '';
+}
+
+if (jarCv) {
+  jarCv.onclick = (e) => {
+    const r = jarCv.getBoundingClientRect();
+    const px = (e.clientX - r.left) * (jarCv.width / r.width);
+    const py = (e.clientY - r.top) * (jarCv.height / r.height);
+    const sx = jarCv.width / (jarState.w || 180);
+    const sy = jarCv.height / (jarState.h || 320);
+    let best = 0;
+    let bd = 22;
+    for (const u of jarState.units || []) {
+      const d = Math.hypot(u.x * sx - px, u.y * sy - py);
+      if (d < bd) { bd = d; best = u.id; }
+    }
+    jarSel = best;
+    drawJar();
+  };
+}
+if ($('jarKill')) $('jarKill').onclick = () => { if (jarSel) api.send('jarKill', { id: jarSel }); };
+if ($('jarFree')) $('jarFree').onclick = () => { if (jarSel) api.send('jarFree', { id: jarSel }); };
+
+if (api.onBottle) {
+  api.onBottle((d) => {
+    jarState = d || jarState;
+    if (jarSel && !(jarState.units || []).some((u) => u.id === jarSel)) jarSel = 0;
+    drawJar();
+  });
+}
+
 api.ready();

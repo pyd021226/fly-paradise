@@ -40,6 +40,7 @@ let overlay = null;
 let panel = null;
 let swatterOn = false;
 let ragOn = false;
+let netOn = false;
 let paused = false;
 let fast = false;
 let watch = false;
@@ -67,7 +68,7 @@ function send(channel, payload) {
 function publishState() {
   if (panel && !panel.isDestroyed()) {
     panel.webContents.send('state', {
-      swatterOn, ragOn, paused, fast, watch, breed, gate, autoStart, annoy: isAnnoy,
+      swatterOn, ragOn, netOn, paused, fast, watch, breed, gate, autoStart, annoy: isAnnoy,
     });
   }
 }
@@ -79,13 +80,14 @@ function raisePanelOverOverlay() {
 }
 
 function toolOn() {
-  return swatterOn || ragOn;
+  return swatterOn || ragOn || netOn;
 }
 
 function putAwaySwatter() {
   if (!toolOn()) return;
   swatterOn = false;
   ragOn = false;
+  netOn = false;
   applyTool();
 }
 
@@ -187,6 +189,7 @@ function applyTool() {
   applyLayer();
   send('swatter', { on: swatterOn, raw: swatterOn && raw });
   send('rag', { on: ragOn, raw: ragOn && raw });
+  send('net', { on: netOn, raw: netOn && raw });
   publishState();
 }
 
@@ -238,10 +241,10 @@ function createOverlay(b) {
 
 function createPanel() {
   const win = new BrowserWindow({
-    width: 300,
+    width: 540,
     height: 640,
     useContentSize: true,
-    minWidth: 260,
+    minWidth: 480,
     minHeight: 320,
     resizable: true,
     minimizable: true,
@@ -560,6 +563,10 @@ if (!app.requestSingleInstanceLock()) {
       }
     });
 
+    ipcMain.on('bottle', (_e, data) => {
+      if (panel && !panel.isDestroyed()) panel.webContents.send('bottle', data);
+    });
+
     ipcMain.on('swatter-off', putAwaySwatter);
 
     ipcMain.on('life-stats', (_e, s) => {
@@ -586,12 +593,18 @@ if (!app.requestSingleInstanceLock()) {
       const name = msg?.name;
       if (name === 'swatter') {
         swatterOn = !swatterOn;
-        if (swatterOn) ragOn = false;
+        if (swatterOn) { ragOn = false; netOn = false; }
         applyTool();
       } else if (name === 'rag') {
         ragOn = !ragOn;
-        if (ragOn) swatterOn = false;
+        if (ragOn) { swatterOn = false; netOn = false; }
         applyTool();
+      } else if (name === 'net') {
+        netOn = !netOn;
+        if (netOn) { swatterOn = false; ragOn = false; }
+        applyTool();
+      } else if (name === 'jarKill' || name === 'jarFree') {
+        send('cmd', { name, id: msg.id });
       } else if (name === 'wash') {
         send('cmd', { name: 'wash' });
       } else if (name === 'swatter-off') {

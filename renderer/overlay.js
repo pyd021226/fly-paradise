@@ -43,6 +43,12 @@ const LIFE_MS = 15 * 60 * 1000;
 const DRY_MAX_MIN = 20;
 const RAG_MAX = 10000;
 const RAG_WASH_MS = 5 * 60 * 1000;
+const NET_R = 84;
+const NET_FALL_MS = 200;
+const JAR_DIE_MS = 2 * 60 * 1000;
+const JAR_W = 180;
+const JAR_H = 320;
+const CRUISE_SPD = 280;
 
 function mateMs() { return fast ? FAST_MS : MATE_MS; }
 function eggMs() { return fast ? FAST_MS : EGG_MS; }
@@ -217,11 +223,19 @@ let icons = [];
 let mouse = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, spd: 0 };
 let swatterOn = false;
 let ragOn = false;
+let netOn = false;
 let ragWipe = false;
 let ragHit = new Set();
 let ragPigment = null;
 let ragUses = 0;
 let washLeftMs = 0;
+let netFallAt = 0;
+let netSolidUntil = 0;
+let netCx = 0;
+let netCy = 0;
+let jar = [];
+let jarAcc = 0;
+let jarHint = '';
 let rawMove = false;
 let paused = false;
 let fast = false;
@@ -878,6 +892,7 @@ function mouseRel(fly) {
 // Closer → higher chance and stronger reaction. Far away almost ignored.
 // Sitting flies only care when the cursor is almost on them.
 function threat(fly, now) {
+  if (netOn) return { p: 0, intensity: 0, dist: 1e9 };
   const { dist } = mouseRel(fly);
   if (fly.state === 'flee') return { p: 0, intensity: 0, dist };
   if (now < (fly.settleUntil || 0)) return { p: 0, intensity: 0, dist };
@@ -1742,6 +1757,226 @@ function tryParthenogenesis() {
   }
 }
 
+function jarRandPos() {
+  return { x: 24 + Math.random() * (JAR_W - 48), y: 28 + Math.random() * (JAR_H - 56) };
+}
+
+function intoJar(kind, extra) {
+  const p = jarRandPos();
+  jar.push({
+    id: extra.id || nextId++,
+    kind,
+    x: p.x,
+    y: p.y,
+    vx: rand(-30, 30),
+    vy: rand(-30, 30),
+    heading: extra.heading || rand(0, Math.PI * 2),
+    sex: extra.sex || 'f',
+    geneD: extra.geneD || 0,
+    geneP: extra.geneP || 0,
+    geneG: extra.geneG || 0,
+    geneX: extra.geneX || 0,
+    geneY: extra.geneY || 0,
+    instar: extra.instar || 1,
+    scale: extra.scale || 1,
+    seed: extra.seed || rand(0, 80),
+    t: extra.t || performance.now(),
+    inMs: 0,
+  });
+}
+
+function inNet(x, y) {
+  return Math.hypot(x - netCx, y - netCy) <= NET_R;
+}
+
+function throwNet(now) {
+  if (netFallAt) return;
+  netCx = mouse.x;
+  netCy = mouse.y;
+  netFallAt = now + NET_FALL_MS;
+  netSolidUntil = 0;
+  const mul = 2 + Math.random() * 6;
+  const spd = CRUISE_SPD * mul;
+  for (const f of flies) {
+    if (f.state === 'dead') continue;
+    if (!inNet(f.x, f.y)) continue;
+    const ang = Math.atan2(f.y - netCy, f.x - netCx) + rand(-0.5, 0.5);
+    interruptEat(f);
+    f.state = 'flee';
+    f.mission = 'flee';
+    f.fleePhase = 'straight';
+    f.perch = null;
+    f.target = null;
+    f.heading = ang;
+    f.fleeSpeed = spd;
+    f.scareUntil = now + 1800;
+    f.vx = Math.cos(ang) * spd;
+    f.vy = Math.sin(ang) * spd;
+  }
+}
+
+function catchNet(now) {
+  for (const f of flies) {
+    if (f.state === 'dead') continue;
+    if (!inNet(f.x, f.y)) continue;
+    interruptEat(f);
+    intoJar('fly', f);
+    f.state = 'dead';
+  }
+  flies = flies.filter((f) => f.state !== 'dead');
+  eggs = eggs.filter((e) => {
+    if (!inNet(e.x, e.y)) return true;
+    intoJar('egg', e);
+    return false;
+  });
+  larvae = larvae.filter((L) => {
+    if (!inNet(L.x, L.y)) return true;
+    interruptEat(L);
+    intoJar('larva', L);
+    return false;
+  });
+  pupae = pupae.filter((p) => {
+    if (!inNet(p.x, p.y)) return true;
+    intoJar('pupa', p);
+    return false;
+  });
+}
+
+function bounceJar(u) {
+  if (u.x < 18) { u.x = 18; u.vx = Math.abs(u.vx); }
+  if (u.x > JAR_W - 18) { u.x = JAR_W - 18; u.vx = -Math.abs(u.vx); }
+  if (u.y < 22) { u.y = 22; u.vy = Math.abs(u.vy); }
+  if (u.y > JAR_H - 22) { u.y = JAR_H - 22; u.vy = -Math.abs(u.vy); }
+}
+
+function stepJar(dt, now) {
+  for (const u of jar) {
+    u.inMs = (u.inMs || 0) + dt * 1000;
+    if (u.kind === 'fly') {
+      u.heading += rand(-2.2, 2.2) * dt;
+      const spd = 55;
+      u.vx = Math.cos(u.heading) * spd;
+      u.vy = Math.sin(u.heading) * spd;
+      u.x += u.vx * dt;
+      u.y += u.vy * dt;
+      bounceJar(u);
+    } else if (u.kind === 'larva') {
+      u.heading += rand(-1.6, 1.6) * dt;
+      const spd = 18 * (u.instar === 1 ? 0.35 : u.instar === 2 ? 0.55 : 0.7);
+      u.x += Math.cos(u.heading) * spd * dt;
+      u.y += Math.sin(u.heading) * spd * dt;
+      bounceJar(u);
+    } else if (u.kind === 'pupa') {
+      if (now - u.t >= pupaMs()) {
+        u.kind = 'fly';
+        u.heading = rand(0, Math.PI * 2);
+      }
+    }
+  }
+  jar = jar.filter((u) => (u.inMs || 0) < JAR_DIE_MS);
+}
+
+function publishJar() {
+  if (!window.fly || !window.fly.sendBottle) return;
+  window.fly.sendBottle({
+    w: JAR_W,
+    h: JAR_H,
+    hint: jarHint,
+    units: jar.map((u) => ({
+      id: u.id,
+      kind: u.kind,
+      x: u.x,
+      y: u.y,
+      heading: u.heading,
+      sex: u.sex,
+      instar: u.instar,
+      geneD: u.geneD,
+      geneP: u.geneP,
+      geneG: u.geneG,
+      geneX: u.geneX,
+      geneY: u.geneY,
+      seed: u.seed,
+      inMs: u.inMs || 0,
+    })),
+  });
+}
+
+function jarKill(id) {
+  jar = jar.filter((u) => u.id !== id);
+  jarHint = '';
+  publishJar();
+}
+
+function jarFree(id) {
+  const u = jar.find((x) => x.id === id);
+  if (!u) return;
+  if (u.kind === 'fly' && !canAddAdult()) {
+    jarHint = '成虫已满 12，放不出。';
+    publishJar();
+    return;
+  }
+  const drop = { x: netCx || (W * 0.5), y: netCy || (H * 0.4) };
+  if (u.kind === 'fly') {
+    const f = spawnFly(drop.x, drop.y, {
+      sex: u.sex, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG, geneX: u.geneX, geneY: u.geneY,
+    });
+    if (!f) {
+      jarHint = '成虫已满 12，放不出。';
+      publishJar();
+      return;
+    }
+    f.needMeal = true;
+    f.state = 'fly';
+    f.mission = 'land';
+  } else if (u.kind === 'egg') {
+    if (breed && eggs.length >= BREED_EGGS) { jarHint = '卵已满，放不出。'; publishJar(); return; }
+    eggs.push({
+      x: drop.x + rand(-10, 10), y: drop.y + rand(-10, 10), rot: rand(0, Math.PI),
+      t: performance.now(), seed: u.seed, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG,
+      geneX: u.geneX, geneY: u.geneY, sex: u.sex, firstOf: null,
+    });
+  } else if (u.kind === 'larva') {
+    if (breed && larvae.length >= BREED_LARVAE) { jarHint = '蛆已满，放不出。'; publishJar(); return; }
+    larvae.push({
+      id: nextId++, x: drop.x, y: drop.y, heading: u.heading, instar: u.instar || 1,
+      eatTimer: 0, skipFood: 0, eatingFood: 0, eatUnits: 0, nextTurn: performance.now(),
+      seed: u.seed, vx: 0, vy: 0, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG,
+      geneX: u.geneX, geneY: u.geneY, sex: u.sex, firstOf: null,
+    });
+  } else if (u.kind === 'pupa') {
+    if (breed && pupae.length >= BREED_PUPAE) { jarHint = '蛹已满，放不出。'; publishJar(); return; }
+    pupae.push({
+      x: drop.x, y: drop.y, rot: u.heading, t: u.t, seed: u.seed,
+      geneD: u.geneD, geneP: u.geneP, geneG: u.geneG, geneX: u.geneX, geneY: u.geneY,
+      sex: u.sex, firstOf: null,
+    });
+  }
+  jar = jar.filter((x) => x.id !== id);
+  jarHint = '';
+  publishJar();
+}
+
+function drawNet(now) {
+  if (!netOn && !(netSolidUntil && now < netSolidUntil)) return;
+  const thrown = netFallAt || (netSolidUntil && now < netSolidUntil);
+  const cx = thrown ? netCx : mouse.x;
+  const cy = thrown ? netCy : mouse.y;
+  if (!thrown && mouse.x < -1000) return;
+  const solid = !netFallAt && netSolidUntil && now < netSolidUntil;
+  ctx.save();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2.2;
+  if (solid) ctx.setLineDash([]);
+  else {
+    ctx.setLineDash([8, 6]);
+    ctx.globalAlpha = ((now / 160) % 2 < 1) ? 1 : 0.28;
+  }
+  ctx.beginPath();
+  ctx.arc(cx, cy, NET_R, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function larvaLen(instar) {
   if (instar === 1) return ADULT_LEN / 3;
   if (instar === 2) return (ADULT_LEN * 2) / 3;
@@ -2231,6 +2466,18 @@ function step(dt, now) {
   closePairs(now);
   stepLife(dt, now);
   tickFoods(dt, now);
+  if (netFallAt && now >= netFallAt) {
+    netFallAt = 0;
+    netSolidUntil = now + 450;
+    catchNet(now);
+  }
+  if (netSolidUntil && now >= netSolidUntil) netSolidUntil = 0;
+  stepJar(dt, now);
+  jarAcc += dt;
+  if (jarAcc > 0.12) {
+    jarAcc = 0;
+    publishJar();
+  }
 
   const dryDt = fast ? dt * (RIPE_MS / FAST_MS) : dt;
   for (const s of splats) s.ageMs = (s.ageMs || 0) + dryDt * 1000;
@@ -3028,7 +3275,7 @@ function drawSwatter() {
 
 function draw(now) {
   ctx.clearRect(0, 0, W, H);
-  if (swatterOn || ragOn) {
+  if (swatterOn || ragOn || netOn) {
     ctx.fillStyle = 'rgba(0,0,0,0.02)';
     ctx.fillRect(0, 0, W, H);
   }
@@ -3046,6 +3293,7 @@ function draw(now) {
     drawRag();
     drawRagWash();
   }
+  if (netOn || netSolidUntil) drawNet(now);
   drawFanfare(now);
 }
 
@@ -3208,6 +3456,7 @@ function snapshot() {
     splats: splats.map((s) => packTimes({ ...s }, ['t'], now)),
     ragUses,
     washLeftMs,
+    jar: jar.map((u) => packTimes({ ...u }, ['t'], now)),
   };
 }
 
@@ -3233,6 +3482,7 @@ function applyRestore(data) {
   splats = (data.splats || []).map((s) => unpackTimes({ ...s }, ['t'], now));
   ragUses = Number(data.ragUses) || 0;
   washLeftMs = Number(data.washLeftMs) || 0;
+  jar = (data.jar || []).map((u) => unpackTimes({ ...u }, ['t'], now));
   booted = true;
   holdBoot = false;
   extinctSince = 0;
@@ -3254,6 +3504,8 @@ function startFresh() {
   raiseFanfare(false);
   ragUses = 0;
   washLeftMs = 0;
+  jar = [];
+  jarHint = '';
   if (!booted && icons.length) boot();
 }
 
@@ -3285,25 +3537,26 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 function trackTool(x, y) {
-  if (!swatterOn && !ragOn) return;
+  if (!swatterOn && !ragOn && !netOn) return;
   mouse.x = x;
   mouse.y = y;
   if (swatterOn) clampHandle();
   else {
     mouse.x = clamp(mouse.x, 0, W);
     mouse.y = clamp(mouse.y, 0, H);
-    if (ragWipe && washLeftMs <= 0) wipeAt(mouse.x, mouse.y);
+    if (ragOn && ragWipe && washLeftMs <= 0) wipeAt(mouse.x, mouse.y);
   }
 }
 
 addEventListener('pointermove', (e) => {
-  if (!swatterOn && !ragOn) return;
+  if (!swatterOn && !ragOn && !netOn) return;
   trackTool(e.clientX, e.clientY);
 }, { passive: true });
 
 addEventListener('pointerdown', (e) => {
-  if (!swatterOn && !ragOn) return;
+  if (!swatterOn && !ragOn && !netOn) return;
   trackTool(e.clientX, e.clientY);
+  if (netOn) { throwNet(performance.now()); return; }
   if (swatterOn) swatAt(performance.now());
   if (ragOn) {
     ragWipe = true;
@@ -3313,6 +3566,7 @@ addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('mousedown', (e) => {
   trackTool(e.clientX, e.clientY);
+  if (netOn) { throwNet(performance.now()); return; }
   if (swatterOn) swatAt(performance.now());
   if (ragOn) {
     ragWipe = true;
@@ -3326,7 +3580,7 @@ addEventListener('mouseup', () => {
 });
 
 addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape' || !(swatterOn || ragOn)) return;
+  if (e.key !== 'Escape' || !(swatterOn || ragOn || netOn)) return;
   window.fly?.putAway?.();
 });
 
@@ -3391,6 +3645,7 @@ if (api) {
     rawMove = !!d.raw;
     document.documentElement.classList.toggle('swatter', swatterOn);
     if (swatterOn) ragOn = false;
+    if (swatterOn) netOn = false;
     if (swatterOn && !was) playSwatterGrab();
     if (!swatterOn && was) stopSwatterMusic();
   });
@@ -3401,12 +3656,21 @@ if (api) {
       rawMove = !!d.raw;
       document.documentElement.classList.toggle('rag', ragOn);
       if (ragOn) swatterOn = false;
+      if (ragOn) netOn = false;
       if (ragOn && !was) playRagGrab();
       if (!ragOn && was) stopRagMusic();
     });
   }
+  if (api.onNet) {
+    api.onNet((d) => {
+      netOn = !!d.on;
+      rawMove = !!d.raw;
+      document.documentElement.classList.toggle('net', netOn);
+      if (netOn) { swatterOn = false; ragOn = false; }
+    });
+  }
   api.onSwatterMove?.((d) => {
-    if (!swatterOn && !ragOn) return;
+    if (!swatterOn && !ragOn && !netOn) return;
     if (d.x == null || d.y == null) return;
     trackTool(d.x, d.y);
   });
@@ -3423,6 +3687,8 @@ if (api) {
       if (washLeftMs > 0) washLeftMs = Math.max(0, washLeftMs - 2000);
       if (washLeftMs === 0) ragUses = 0;
     }
+    if (d.name === 'jarKill') jarKill(d.id);
+    if (d.name === 'jarFree') jarFree(d.id);
     if (d.name === 'breed') {
       if (!flavorAnnoy) {
         breed = !!d.value;
