@@ -94,29 +94,37 @@ function rgbStr(c) {
 }
 
 function dryDarken(color, stain) {
-  const k = 1 - 0.015 * dryAge(stain);
+  const t = Math.min(1, 0.015 * dryAge(stain));
   const c = typeof color === 'string' ? parseRgb(color) : color;
-  return rgbStr([c[0] * k, c[1] * k, c[2] * k]);
+  return rgbStr([
+    c[0] + (42 - c[0]) * t,
+    c[1] + (24 - c[1]) * t,
+    c[2] + (14 - c[2]) * t,
+  ]);
 }
 
 function dryLighten(color, stain) {
-  const t = 0.01 * dryAge(stain);
+  const t = Math.min(1, 0.01 * dryAge(stain));
   const c = typeof color === 'string' ? parseRgb(color) : color;
   return rgbStr([
-    c[0] + (228 - c[0]) * t,
-    c[1] + (208 - c[1]) * t,
-    c[2] + (188 - c[2]) * t,
+    c[0] + (210 - c[0]) * t,
+    c[1] + (186 - c[1]) * t,
+    c[2] + (150 - c[2]) * t,
   ]);
 }
 
 function dimCol(stain) {
-  const k = 1 - 0.015 * dryAge(stain);
-  if (k >= 0.999) return;
+  const t = Math.min(1, 0.015 * dryAge(stain));
+  if (t <= 0) return;
   for (const key of ['thorax', 'thoraxDark', 'abdomen', 'band', 'head', 'leg', 'eye', 'eyeDark', 'eyeHi']) {
     const v = COL[key];
     if (typeof v !== 'string' || v[0] !== '#') continue;
     const c = parseRgb(v);
-    COL[key] = rgbStr([c[0] * k, c[1] * k, c[2] * k]);
+    COL[key] = rgbStr([
+      c[0] + (42 - c[0]) * t,
+      c[1] + (24 - c[1]) * t,
+      c[2] + (14 - c[2]) * t,
+    ]);
   }
 }
 
@@ -2174,8 +2182,9 @@ function step(dt, now) {
   stepLife(dt, now);
   tickFoods(dt, now);
 
-  for (const s of splats) s.ageMs = (s.ageMs || 0) + dt * 1000;
-  for (const c of corpses) c.ageMs = (c.ageMs || 0) + dt * 1000;
+  const dryDt = fast ? dt * (RIPE_MS / FAST_MS) : dt;
+  for (const s of splats) s.ageMs = (s.ageMs || 0) + dryDt * 1000;
+  for (const c of corpses) c.ageMs = (c.ageMs || 0) + dryDt * 1000;
   if (washLeftMs > 0) {
     washLeftMs = Math.max(0, washLeftMs - dt * 1000);
     if (washLeftMs === 0) ragUses = 0;
