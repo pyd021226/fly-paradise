@@ -41,7 +41,7 @@ const FAST_MS = 1500;
 const FAST_EAT = 2;
 const LIFE_MS = 15 * 60 * 1000;
 const DRY_MAX_MIN = 20;
-const RAG_MAX = 100;
+const RAG_MAX = 10000;
 const RAG_WASH_MS = 5 * 60 * 1000;
 
 function mateMs() { return fast ? FAST_MS : MATE_MS; }
@@ -74,18 +74,34 @@ function wipesNeed(stain) {
   return 1 + dryMin(stain);
 }
 
-function wipeFade(stain) {
-  return clamp((stain.wipes || 0) / Math.max(1, wipesNeed(stain)), 0, 0.92);
+function toRgb(color) {
+  return typeof color === 'string' ? parseRgb(color) : color;
+}
+
+function smearToward(from, to, k) {
+  return [
+    from[0] + (to[0] - from[0]) * k,
+    from[1] + (to[1] - from[1]) * k,
+    from[2] + (to[2] - from[2]) * k,
+  ];
+}
+
+function smearStain(stain, fallback) {
+  const src = stain.pigment || toRgb(fallback || '#4a1020');
+  if (!ragPigment) ragPigment = src.slice();
+  else {
+    const k = 0.25 + ((stain.seed || 0) % 8) * 0.04;
+    ragPigment = smearToward(ragPigment, src, k);
+  }
+  const k2 = 0.2 + ((stain.seed || 3) % 9) * 0.035;
+  stain.pigment = smearToward(src, ragPigment, k2);
 }
 
 function wipeMix(color, stain) {
-  const fade = wipeFade(stain);
-  const c = typeof color === 'string' ? parseRgb(color) : color;
-  return rgbStr([
-    c[0] + (214 - c[0]) * fade,
-    c[1] + (202 - c[1]) * fade,
-    c[2] + (186 - c[2]) * fade,
-  ]);
+  const c = toRgb(color);
+  if (!stain.pigment) return rgbStr(c);
+  const k = 0.35 + ((stain.seed || 0) % 6) * 0.07;
+  return rgbStr(smearToward(c, stain.pigment, k));
 }
 
 function dryScale(stain) {
@@ -203,6 +219,7 @@ let swatterOn = false;
 let ragOn = false;
 let ragWipe = false;
 let ragHit = new Set();
+let ragPigment = null;
 let ragUses = 0;
 let washLeftMs = 0;
 let rawMove = false;
@@ -2040,38 +2057,49 @@ function startWash() {
   washLeftMs = RAG_WASH_MS;
   ragWipe = false;
   ragHit = new Set();
+  ragPigment = null;
   window.fly?.putAway?.();
 }
 
 function wipeAt(x, y) {
   if (washLeftMs > 0) return;
   const r2 = RAG_R * RAG_R;
-  const hitOne = (s, kind) => {
+  const nowOn = new Set();
+  const touch = (s, kind, fallback) => {
     const dx = s.x - x;
     const dy = s.y - y;
-    if (dx * dx + dy * dy > r2) return false;
+    const hit = dx * dx + dy * dy <= r2;
     if (!s.id) s.id = `${kind}:${nextId++}`;
-    if (ragHit.has(s.id)) return false;
-    ragHit.add(s.id);
-    s.wipes = (s.wipes || 0) + 1;
-    ragUses += 1;
-    if (ragUses >= RAG_MAX) startWash();
+    if (!hit) return false;
+    nowOn.add(s.id);
+    if (!ragHit.has(s.id)) {
+      s.wipes = (s.wipes || 0) + 1;
+      ragUses += 1;
+      smearStain(s, fallback);
+      if (ragUses >= RAG_MAX) startWash();
+    }
     return s.wipes >= wipesNeed(s);
   };
-  splats = splats.filter((s) => !hitOne(s, 'splat'));
+  splats = splats.filter((s) => !touch(s, 'splat', '#4a1020'));
   shells = shells.filter((s) => {
     if (underIcon(s.x, s.y)) return true;
     const dx = s.x - x;
     const dy = s.y - y;
     if (dx * dx + dy * dy > r2) return true;
     if (!s.id) s.id = `shell:${nextId++}`;
-    if (ragHit.has(s.id)) return true;
-    ragHit.add(s.id);
-    ragUses += 1;
-    if (ragUses >= RAG_MAX) startWash();
-    return false;
+    nowOn.add(s.id);
+    if (!ragHit.has(s.id)) {
+      ragUses += 1;
+      if (ragUses >= RAG_MAX) startWash();
+      return false;
+    }
+    return true;
   });
-  corpses = corpses.filter((s) => !hitOne(s, 'corpse'));
+  corpses = corpses.filter((s) => {
+    const fb = s.kind === 'larva' ? '#b39470' : s.kind === 'pupa' ? '#4a2814' : s.kind === 'egg' ? '#c4b496' : '#6b4524';
+    return !touch(s, 'corpse', fb);
+  });
+  ragHit = nowOn;
 }
 
 const HANDLE_X = 19;
@@ -2256,7 +2284,6 @@ function drawFood(f) {
 
 function drawSplat(s) {
   const t = dryAge(s) / DRY_MAX_MIN;
-  const fade = wipeFade(s);
   const oldCol = [74, 16, 32];
   const newCol = [
     74 + (58 - 74) * t,
@@ -2270,7 +2297,7 @@ function drawSplat(s) {
   ];
   const center = wipeMix(dryLighten(mixed, s), s);
   const ring = wipeMix(dryDarken(mixed, s), s);
-  const midA = (0.72 + (0.6 - 0.72) * t) * (1 - fade * 0.55);
+  const midA = 0.72 + (0.6 - 0.72) * t;
   ctx.save();
   ctx.translate(s.x, s.y);
   ctx.rotate(s.seed);
@@ -2292,6 +2319,15 @@ function drawSplat(s) {
   ctx.beginPath();
   ctx.ellipse(7 * k, -3 * k, 3 * k, 2 * k, 0.8, 0, Math.PI * 2);
   ctx.stroke();
+  if (s.pigment) {
+    ctx.globalAlpha = midA * 0.55;
+    ctx.fillStyle = rgbStr(s.pigment);
+    const ox = ((s.seed || 1) % 5) - 2;
+    const oy = ((s.seed || 2) % 4) - 1.5;
+    ctx.beginPath();
+    ctx.ellipse(ox * k, oy * k, 4.5 * k, 2.8 * k, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -2773,14 +2809,13 @@ function drawDeadLarva(c) {
   ctx.translate(c.x, c.y);
   ctx.scale(0.8 * s, 0.8 * s);
   ctx.rotate(c.heading || 0);
-  ctx.globalAlpha = 1 - wipeFade(c) * 0.45;
+  ctx.globalAlpha = 1;
   if (instar === 1) {
     ctx.fillStyle = mixed;
     ctx.beginPath();
     ctx.ellipse(-len * 0.1, 0.45, len * 0.48, thick, 0.38, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = dried;
-    ctx.globalAlpha = 1;
     ctx.beginPath();
     ctx.ellipse(-len * 0.18, 0.2, thick * 0.55, thick * 0.4, 0.3, 0, Math.PI * 2);
     ctx.fill();
@@ -2793,7 +2828,6 @@ function drawDeadLarva(c) {
       const px = -len * 0.48 + u * len * 0.96;
       const py = Math.sin(u * Math.PI * waves + (c.seed || 0) * 0.2) * amp;
       const r = thick * (1.2 - u * 0.4);
-      ctx.globalAlpha = (i % 2 === 0) ? 1 : 1 - wipeFade(c) * 0.5;
       ctx.fillStyle = (i % 2 === 0) ? dried : mixed;
       ctx.beginPath();
       ctx.ellipse(px, py + 0.3, r * 1.15, r, 0.2, 0, Math.PI * 2);
@@ -3273,7 +3307,6 @@ addEventListener('pointerdown', (e) => {
   if (swatterOn) swatAt(performance.now());
   if (ragOn) {
     ragWipe = true;
-    ragHit = new Set();
     wipeAt(mouse.x, mouse.y);
   }
 });
@@ -3283,7 +3316,6 @@ canvas.addEventListener('mousedown', (e) => {
   if (swatterOn) swatAt(performance.now());
   if (ragOn) {
     ragWipe = true;
-    ragHit = new Set();
     wipeAt(mouse.x, mouse.y);
   }
 });
@@ -3302,18 +3334,11 @@ const api = window.fly;
 if (api) {
   api.onAmbient((d) => {
     if (d.grabbing != null) grabbing = !!d.grabbing;
-    if (ragOn) {
-      if (grabbing && !ragWipe) {
-        ragWipe = true;
-        ragHit = new Set();
-        if (washLeftMs <= 0) wipeAt(mouse.x, mouse.y);
-      } else if (!grabbing) {
-        ragWipe = false;
-        ragHit = new Set();
-      }
-    }
     if (d.mouse) {
       if (!(swatterOn || ragOn)) {
+        mouse.x = d.mouse.x;
+        mouse.y = d.mouse.y;
+      } else if (ragOn && d.mouse.x != null) {
         mouse.x = d.mouse.x;
         mouse.y = d.mouse.y;
       }
@@ -3322,6 +3347,13 @@ if (api) {
         mouse.vy = d.mouse.vy;
         mouse.spd = Math.hypot(mouse.vx, mouse.vy);
       }
+    }
+    if (ragOn && grabbing && washLeftMs <= 0) {
+      ragWipe = true;
+      wipeAt(mouse.x, mouse.y);
+    } else if (ragOn && !grabbing) {
+      ragWipe = false;
+      ragHit = new Set();
     }
   });
   api.onIcons((d) => {
