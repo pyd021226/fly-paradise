@@ -1807,7 +1807,7 @@ function throwNet(now) {
   netCy = mouse.y;
   netFallAt = now + NET_FALL_MS;
   netSolidUntil = 0;
-  const mul = 1 + Math.random() * 0.5;
+  const mul = 1 + Math.floor(Math.random() * 3);
   const spd = CRUISE_SPD * mul;
   for (const f of flies) {
     if (f.state === 'dead') continue;
@@ -2087,14 +2087,17 @@ function drawBottle(now) {
       ctx.lineWidth = 0.8;
       ctx.stroke();
     }
+    ctx.restore();
     if (jarSel.has(u.id)) {
+      ctx.save();
+      ctx.translate(u.x, u.y);
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(0, 0, 14, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.restore();
     }
-    ctx.restore();
   }
   ctx.restore();
 }
