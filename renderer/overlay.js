@@ -1854,7 +1854,6 @@ function stepJar(dt, now) {
     u.inMs = (u.inMs || 0) + dt * 1000;
     if (u.inMs >= JAR_DIE_MS) {
       u.dead = true;
-      jarSel.delete(u.id);
       continue;
     }
     if (u.kind === 'fly') {
@@ -1901,7 +1900,7 @@ function publishJar() {
 function pruneJarSel() {
   for (const id of [...jarSel]) {
     const u = jar.find((x) => x.id === id);
-    if (!u || u.dead) jarSel.delete(id);
+    if (!u) jarSel.delete(id);
   }
 }
 
@@ -1920,7 +1919,7 @@ function jarKillSel() {
 }
 
 function jarSelectAll() {
-  jarSel = new Set(jar.filter((u) => !u.dead).map((u) => u.id));
+  jarSel = new Set(jar.map((u) => u.id));
   publishJar();
 }
 
@@ -1932,13 +1931,27 @@ function jarFreeSel() {
 
 function jarFree(id) {
   const u = jar.find((x) => x.id === id);
-  if (!u || u.dead) return;
+  if (!u) return;
+  const drop = { x: netCx || (W * 0.5), y: netCy || (H * 0.4) };
+  if (u.dead) {
+    corpses.push({
+      id: nextId++, kind: 'fly',
+      x: drop.x + rand(-6, 6), y: drop.y + rand(-6, 6),
+      heading: u.heading, seed: u.seed, scale: u.scale || 1, sex: u.sex,
+      geneD: u.geneD, geneP: u.geneP, geneG: u.geneG, geneX: u.geneX, geneY: u.geneY,
+      ageMs: 0, wipes: 0,
+    });
+    jar = jar.filter((x) => x.id !== id);
+    jarSel.delete(id);
+    jarHint = '';
+    publishJar();
+    return;
+  }
   if (u.kind === 'fly' && !canAddAdult()) {
     jarHint = '成虫已满 12，放不出。';
     publishJar();
     return;
   }
-  const drop = { x: netCx || (W * 0.5), y: netCy || (H * 0.4) };
   if (u.kind === 'fly') {
     const f = spawnFly(drop.x, drop.y, {
       sex: u.sex, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG, geneX: u.geneX, geneY: u.geneY,
@@ -2111,7 +2124,6 @@ function bottleAt(x, y) {
   let best = null;
   let bd = 16;
   for (const u of jar) {
-    if (u.dead) continue;
     const d = Math.hypot(u.x - jx, u.y - jy);
     if (d < bd) { bd = d; best = u; }
   }
