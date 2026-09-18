@@ -929,6 +929,7 @@ function scare(fly, now, intensity) {
   }
   fly.state = 'flee';
   fly.mission = 'flee';
+  fly.netEscape = 0;
   fly.perch = null;
   fly.target = null;
   fly.crawling = false;
@@ -1204,6 +1205,7 @@ function stepFly(fly, dt, now) {
     }
     if (fly.safeSince && now - fly.safeSince >= 3000) {
       fly.state = 'fly';
+      fly.netEscape = 0;
       if (Math.random() < 0.5) {
         fly.mission = 'cruise';
         fly.cruiseUntil = now + rand(1000, 3000);
@@ -1222,9 +1224,16 @@ function stepFly(fly, dt, now) {
       } else {
         wanderHeading(fly, dt, now);
       }
-      const spd = fly.fleeSpeed * (0.85 + 0.2 * Math.sin(now * 0.008 + fly.seed));
-      armBoosts(fly, now, rel.dist, r);
-      const mul = fleeMul(fly, now);
+      let spd;
+      let mul;
+      if (fly.netEscape) {
+        spd = fly.netEscape * (0.9 + 0.1 * Math.sin(now * 0.01 + fly.seed));
+        mul = 1;
+      } else {
+        spd = fly.fleeSpeed * (0.85 + 0.2 * Math.sin(now * 0.008 + fly.seed));
+        armBoosts(fly, now, rel.dist, r);
+        mul = fleeMul(fly, now);
+      }
       fly.vx = Math.cos(fly.heading) * spd * mul;
       fly.vy = Math.sin(fly.heading) * spd * mul;
     }
@@ -1809,6 +1818,7 @@ function throwNet(now) {
     f.target = null;
     f.heading = ang;
     f.fleeSpeed = spd;
+    f.netEscape = spd;
     f.scareUntil = now + 1800;
     f.vx = Math.cos(ang) * spd;
     f.vy = Math.sin(ang) * spd;
@@ -1843,10 +1853,12 @@ function catchNet(now) {
 }
 
 function bounceJar(u) {
-  if (u.x < 18) { u.x = 18; u.vx = Math.abs(u.vx); }
-  if (u.x > JAR_W - 18) { u.x = JAR_W - 18; u.vx = -Math.abs(u.vx); }
-  if (u.y < 22) { u.y = 22; u.vy = Math.abs(u.vy); }
-  if (u.y > JAR_H - 22) { u.y = JAR_H - 22; u.vy = -Math.abs(u.vy); }
+  let bounced = false;
+  if (u.x < 18) { u.x = 18; u.vx = Math.abs(u.vx); bounced = true; }
+  if (u.x > JAR_W - 18) { u.x = JAR_W - 18; u.vx = -Math.abs(u.vx); bounced = true; }
+  if (u.y < 22) { u.y = 22; u.vy = Math.abs(u.vy); bounced = true; }
+  if (u.y > JAR_H - 22) { u.y = JAR_H - 22; u.vy = -Math.abs(u.vy); bounced = true; }
+  if (bounced) u.heading = Math.atan2(u.vy, u.vx) + rand(-0.6, 0.6);
 }
 
 function stepJar(dt, now) {
