@@ -1804,7 +1804,7 @@ function throwNet(now) {
   netCy = mouse.y;
   netFallAt = now + NET_FALL_MS;
   netSolidUntil = 0;
-  const mul = 1 + Math.random() * 3;
+  const mul = 1 + Math.random() * 0.5;
   const spd = CRUISE_SPD * mul;
   for (const f of flies) {
     if (f.state === 'dead') continue;
