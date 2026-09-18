@@ -1920,6 +1920,7 @@ function publishJar() {
       geneX: u.geneX,
       geneY: u.geneY,
       seed: u.seed,
+      scale: u.scale,
       inMs: u.inMs || 0,
     })),
   });

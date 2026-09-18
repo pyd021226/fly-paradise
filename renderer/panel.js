@@ -181,7 +181,7 @@ const jarCtx = jarCv ? jarCv.getContext('2d') : null;
 function jarDrawFly(u) {
   const pal = JAR_PAL[jarMorph(u)] || JAR_PAL.wild;
   const male = u.sex === 'm';
-  const t = performance.now() * 0.001;
+  const t = performance.now();
   const seed = u.seed || 0;
   const C = {
     wing: 'rgba(248,250,252,0.5)',
@@ -347,7 +347,8 @@ function drawJar() {
       jarCtx.stroke();
     } else {
       jarCtx.save();
-      jarCtx.scale(2.4, 2.4);
+      const k = (u.scale || 1) * 2.0;
+      jarCtx.scale(k, k);
       jarCtx.rotate(u.heading || 0);
       jarDrawFly(u);
       jarCtx.restore();
