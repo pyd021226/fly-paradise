@@ -41,6 +41,7 @@ let panel = null;
 let swatterOn = false;
 let ragOn = false;
 let netOn = false;
+let captureOpen = false;
 let paused = false;
 let fast = false;
 let watch = false;
@@ -467,6 +468,7 @@ let bottleHover = false;
 let bottlePrev = false;
 
 function bottleRect() {
+  if (!captureOpen) return null;
   if (!overlay || overlay.isDestroyed()) return null;
   const ob = overlay.getBounds();
   let px = ob.x + ob.width;
@@ -646,6 +648,14 @@ if (!app.requestSingleInstanceLock()) {
         applyTool();
       } else if (name === 'jarKill' || name === 'jarFree') {
         send('cmd', { name, id: msg.id });
+      } else if (name === 'jarSelectAll' || name === 'jarKillSel' || name === 'jarFreeSel') {
+        send('cmd', { name });
+      } else if (name === 'capture') {
+        captureOpen = !!(msg && msg.open);
+        send('cmd', { name: 'capture', value: captureOpen });
+        if (captureOpen) sendBottleRect();
+        else { bottleHover = false; bottlePrev = false; applyBottleHover(); }
+        publishState();
       } else if (name === 'wash') {
         send('cmd', { name: 'wash' });
       } else if (name === 'swatter-off') {

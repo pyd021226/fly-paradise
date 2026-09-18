@@ -238,6 +238,7 @@ let jarAcc = 0;
 let jarHint = '';
 let jarSel = new Set();
 let bottle = null;
+let captureOpen = false;
 let rawMove = false;
 let paused = false;
 let fast = false;
@@ -1806,7 +1807,7 @@ function throwNet(now) {
   netCy = mouse.y;
   netFallAt = now + NET_FALL_MS;
   netSolidUntil = 0;
-  const mul = 2 + Math.random() * 2;
+  const mul = 1 + Math.random() * 0.5;
   const spd = CRUISE_SPD * mul;
   for (const f of flies) {
     if (f.state === 'dead') continue;
@@ -2009,7 +2010,7 @@ function drawNet(now) {
 }
 
 function drawBottle(now) {
-  if (!bottle) return;
+  if (!bottle || !captureOpen) return;
   const b = bottle;
   const pad = 12;
   const spaceScale = (b.w - pad * 2) / JAR_W;
@@ -3694,7 +3695,7 @@ addEventListener('pointermove', (e) => {
 
 addEventListener('pointerdown', (e) => {
   if (!swatterOn && !ragOn && !netOn) {
-    if (bottle) {
+    if (bottle && captureOpen) {
       const u = bottleAt(e.clientX, e.clientY);
       if (u) {
         if (jarSel.has(u.id)) jarSel.delete(u.id);
@@ -3846,6 +3847,7 @@ if (api) {
     if (d.name === 'jarSelectAll') jarSelectAll();
     if (d.name === 'jarKillSel') jarKillSel();
     if (d.name === 'jarFreeSel') jarFreeSel();
+    if (d.name === 'capture') captureOpen = !!d.value;
     if (d.name === 'breed') {
       if (!flavorAnnoy) {
         breed = !!d.value;

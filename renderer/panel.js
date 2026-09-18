@@ -99,6 +99,21 @@ $('rag').onclick = () => {
   else api.send('rag');
 };
 $('net').onclick = () => api.send('net');
+let captureOpen = false;
+function paintCapture() {
+  const btn = $('capture');
+  if (!btn) return;
+  btn.classList.toggle('on', captureOpen);
+  btn.textContent = captureOpen ? '收起捕捉' : '捕捉';
+  const sec = $('captureSection');
+  if (sec) sec.classList.toggle('open', captureOpen);
+}
+$('capture').onclick = () => {
+  captureOpen = !captureOpen;
+  paintCapture();
+  api.send('capture', { open: captureOpen });
+};
+paintCapture();
 $('xray').onclick = () => api.send('xray');
 $('autoStart').onchange = () => api.send('autostart');
 $('resume').onclick = () => api.send('resume');

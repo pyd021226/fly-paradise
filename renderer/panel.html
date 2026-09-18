@@ -27,6 +27,8 @@
       color: var(--pink);
       margin: 0 0 8px;
     }
+    #captureSection { display: none; }
+    #captureSection.open { display: block; }
     h1 {
       font-size: 17px;
       font-weight: 650;
@@ -141,16 +143,17 @@
     <button id="xray" type="button">全图透视</button>
     <button class="primary" id="swatter" type="button">拿出苍蝇拍</button>
     <button id="rag" type="button">拿出抹布</button>
-    <button id="net" type="button">拿出捕网</button>
+    <button id="capture" type="button">捕捉</button>
+    <div id="captureSection">
+      <button id="net" type="button">拿出捕网</button>
+      <p class="jar-msg" id="jarMsg"></p>
+      <div class="row"><button id="jarAll" type="button">瓶内全选</button></div>
+      <div class="row">
+        <button id="jarKill" type="button">杀死选中</button>
+        <button id="jarFree" type="button">放回选中</button>
+      </div>
+    </div>
     <p class="note">按 Esc 退出</p>
-    <p class="jar-msg" id="jarMsg"></p>
-    <div class="row">
-      <button id="jarAll" type="button">瓶内全选</button>
-    </div>
-    <div class="row">
-      <button id="jarKill" type="button">杀死选中</button>
-      <button id="jarFree" type="button">放回选中</button>
-    </div>
     <div class="add-row">
       <button id="add" type="button">加一只</button>
       <label><input id="sexF" type="checkbox">雌</label>
