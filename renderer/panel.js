@@ -10,6 +10,16 @@ function fmtMs(ms) {
   return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
+function sexn(f, m) {
+  return `${f || 0}雌 ${m || 0}雄`;
+}
+
+function ragWashHint(s) {
+  const left = Number(s && s.washLeftMs) || 0;
+  if (left <= 0) return '';
+  return `抹布太脏了还在洗！${fmtMs(left)}`;
+}
+
 let lastLife = { cleared: false, breedMs: 0, breed: true };
 let isAnnoy = false;
 
@@ -36,7 +46,8 @@ function render(s) {
   if (on) {
     $('hint').textContent = '拍子跟着鼠标。左键打。Esc 还鼠标；点退出或关窗口随时能关。';
   } else if (rag) {
-    $('hint').textContent = '抹布跟着鼠标。按住拖动能擦掉汁和空蛹壳。Esc 收起。';
+    const wash = ragWashHint(lastLife);
+    $('hint').textContent = wash || '抹布跟着鼠标。按住拖动能擦掉汁、尸体和空蛹壳。Esc 收起。';
   } else if (fast) {
     $('hint').textContent = '快进：成熟、进食、交配、卵、蛹大约 1.5 秒。';
   } else if (watch) {
@@ -86,18 +97,20 @@ if (api.onLife) {
     lastLife = last;
     const el = $('stats');
     if (!el) return;
-    let line = `成虫 ${last.adults || 0}　卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}`;
-    line += `<span class="m">褐色（A_B_C_/A_B_cc） ${last.wild || 0}</span>`;
-    line += `<span class="m">中褐（A_bbC_/A_bbcc） ${last.mid || 0}</span>`;
-    line += `<span class="m">深褐（aaB_C_/aaB_cc） ${last.deep || 0}</span>`;
-    line += `<span class="m">白色（aabbC_） ${last.white || 0}</span>`;
-    line += `<span class="m">绿色（aabbcc） ${last.green || 0}</span>`;
-    if (last.rainbow) line += `<span class="m">彩虹（aabbccxx） ${last.rainbow}</span>`;
+    let line = `成虫 ${last.adults || 0}（${sexn(last.adultF, last.adultM)}）　卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}`;
+    line += `<span class="m">褐色（A_B_C_/A_B_cc） ${sexn(last.wildF, last.wildM)}</span>`;
+    line += `<span class="m">中褐（A_bbC_/A_bbcc） ${sexn(last.midF, last.midM)}</span>`;
+    line += `<span class="m">深褐（aaB_C_/aaB_cc） ${sexn(last.deepF, last.deepM)}</span>`;
+    line += `<span class="m">白色（aabbC_） ${sexn(last.whiteF, last.whiteM)}</span>`;
+    line += `<span class="m">绿色（aabbcc） ${sexn(last.greenF, last.greenM)}</span>`;
+    if (last.rainbow) line += `<span class="m">彩虹（aabbccxx） ${sexn(last.rainbowF, last.rainbowM)}</span>`;
     if (isAnnoy) line += `<span class="m">绿峰值 ${last.greenPeak || 0}</span>`;
     if (last.breed) {
       line += `<br>${last.cleared ? '通关' : '计时'} ${fmtMs(last.breedMs)}`;
     }
     el.innerHTML = line;
+    const wash = ragWashHint(last);
+    if (wash && $('rag').classList.contains('on')) $('hint').textContent = wash;
     const hint = $('hint');
     if (hint && last.cleared && last.breed && !document.body.classList.contains('gate')) {
       const sw = $('swatter');

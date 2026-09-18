@@ -39,6 +39,10 @@ const AIR_MAX_MS = 15000;
 const ICON_PX = 32;
 const FAST_MS = 1500;
 const FAST_EAT = 2;
+const LIFE_MS = 15 * 60 * 1000;
+const DRY_MAX_MIN = 20;
+const RAG_MAX = 100;
+const RAG_WASH_MS = 5 * 60 * 1000;
 
 function mateMs() { return fast ? FAST_MS : MATE_MS; }
 function eggMs() { return fast ? FAST_MS : EGG_MS; }
@@ -52,6 +56,44 @@ function eatNeedFor(unit) {
   if (unit && unit.instar === 2) return EAT_L2;
   if (unit && unit.instar === 3) return EAT_L3;
   return EAT_UNITS;
+}
+
+function dryMin(stain) {
+  return Math.min(DRY_MAX_MIN, Math.floor((stain.ageMs || 0) / 60000));
+}
+
+function dryT(stain) {
+  return dryMin(stain) / DRY_MAX_MIN;
+}
+
+function wipesNeed(stain) {
+  return 1 + dryMin(stain);
+}
+
+function clutchSexes(n) {
+  if (n <= 0) return [];
+  if (n === 1) return [Math.random() < 0.5 ? 'm' : 'f'];
+  const s = ['m', 'f'];
+  for (let i = 2; i < n; i++) s.push(Math.random() < 0.5 ? 'm' : 'f');
+  for (let i = s.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = s[i];
+    s[i] = s[j];
+    s[j] = t;
+  }
+  return s;
+}
+
+function paintDry(stain, rx, ry) {
+  const t = dryT(stain);
+  if (t <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = t * 0.5;
+  ctx.fillStyle = '#140a06';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx * (1 - t * 0.12), ry * (1 - t * 0.18), 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 function isGenoGreen(u) {
@@ -100,6 +142,9 @@ let mouse = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, spd: 0 };
 let swatterOn = false;
 let ragOn = false;
 let ragWipe = false;
+let ragHit = new Set();
+let ragUses = 0;
+let washLeftMs = 0;
 let rawMove = false;
 let paused = false;
 let fast = false;
@@ -1020,6 +1065,13 @@ function stepFly(fly, dt, now) {
     return;
   }
 
+  fly.liveMs = (fly.liveMs || 0) + dt * 1000;
+  if (fly.liveMs >= LIFE_MS) {
+    corpses.push(flyCorpse(fly));
+    fly.state = 'dead';
+    return;
+  }
+
   if (fly.kidDieAt && !fly.dieAt && now >= fly.kidDieAt) {
     corpses.push(flyCorpse(fly));
     fly.state = 'dead';
@@ -1395,6 +1447,7 @@ audKill.addEventListener('ended', () => {
 
 function flyCorpse(fly) {
   return {
+    id: nextId++,
     kind: 'fly',
     x: fly.x,
     y: fly.y,
@@ -1407,6 +1460,8 @@ function flyCorpse(fly) {
     geneG: fly.geneG,
     geneX: fly.geneX,
     geneY: fly.geneY,
+    ageMs: 0,
+    wipes: 0,
   };
 }
 
@@ -1418,7 +1473,14 @@ function killFly(fly, now) {
 }
 
 function addSplat(x, y, now, seed, scale) {
-  splats.push({ x, y, t: now, seed: seed || rand(0, 10), scale: scale || 1 });
+  splats.push({
+    id: nextId++,
+    x, y, t: now,
+    seed: seed || rand(0, 10),
+    scale: scale || 1,
+    ageMs: 0,
+    wipes: 0,
+  });
 }
 
 function beginPair(a, b, now) {
@@ -1562,16 +1624,19 @@ function finishMate(fly, now) {
   if (other && other.state === 'mate') reset(other);
 }
 
-function layEggs(x, y, mom, dad, firstOf) {
+function layEggs(x, y, mom, dad, firstOf, clone) {
   const want = breed ? 2 + Math.floor(Math.random() * 2) : 6 + Math.floor(Math.random() * 3);
   const room = breed ? Math.max(0, BREED_EGGS - eggs.length) : want;
   const n = Math.min(want, room);
-  const from = firstOf && firstOf.length ? firstOf.slice() : null;
+  const from = clone ? null : (firstOf && firstOf.length ? firstOf.slice() : null);
+  const sexes = clone ? Array.from({ length: n }, () => (mom && mom.sex) || 'f') : clutchSexes(n);
   for (let i = 0; i < n; i++) {
-    const geneD = inheritGene(mom && mom.geneD, dad && dad.geneD);
-    const geneP = inheritGene(mom && mom.geneP, dad && dad.geneP);
-    const geneG = inheritGene(mom && mom.geneG, dad && dad.geneG);
-    const extra = (geneD >= 2 && geneP >= 2 && geneG >= 2) ? extraGenes(mom, dad) : { geneX: 0, geneY: 0 };
+    const geneD = clone ? (mom && mom.geneD) : inheritGene(mom && mom.geneD, dad && dad.geneD);
+    const geneP = clone ? (mom && mom.geneP) : inheritGene(mom && mom.geneP, dad && dad.geneP);
+    const geneG = clone ? (mom && mom.geneG) : inheritGene(mom && mom.geneG, dad && dad.geneG);
+    const extra = clone
+      ? { geneX: (mom && mom.geneX) || 0, geneY: (mom && mom.geneY) || 0 }
+      : ((geneD >= 2 && geneP >= 2 && geneG >= 2) ? extraGenes(mom, dad) : { geneX: 0, geneY: 0 });
     eggs.push({
       x: x + rand(-12, 12),
       y: y + rand(-10, 10),
@@ -1583,9 +1648,20 @@ function layEggs(x, y, mom, dad, firstOf) {
       geneG,
       geneX: extra.geneX,
       geneY: extra.geneY,
-      sex: Math.random() < 0.5 ? 'm' : 'f',
+      sex: sexes[i],
       firstOf: from,
     });
+  }
+}
+
+function tryParthenogenesis() {
+  const living = flies.filter((f) => f.state !== 'dead');
+  if (!living.length || living.some((f) => f.sex === 'm')) return;
+  const moms = living.filter((f) => f.sex === 'f' && !f.retired && (f.mates || 0) < 2 && !f.kidDieAt);
+  for (const mom of moms) {
+    layEggs(mom.x, mom.y, mom, mom, null, true);
+    corpses.push(flyCorpse(mom));
+    mom.state = 'dead';
   }
 }
 
@@ -1900,23 +1976,34 @@ function stepLife(dt, now) {
 }
 
 function wipeAt(x, y) {
+  if (washLeftMs > 0) return;
   const r2 = RAG_R * RAG_R;
-  splats = splats.filter((s) => {
+  const hitOne = (s, kind) => {
     const dx = s.x - x;
     const dy = s.y - y;
-    return dx * dx + dy * dy > r2;
-  });
+    if (dx * dx + dy * dy > r2) return false;
+    if (!s.id) s.id = `${kind}:${nextId++}`;
+    if (ragHit.has(s.id)) return false;
+    ragHit.add(s.id);
+    s.wipes = (s.wipes || 0) + 1;
+    ragUses += 1;
+    if (ragUses >= RAG_MAX) washLeftMs = RAG_WASH_MS;
+    return s.wipes >= wipesNeed(s);
+  };
+  splats = splats.filter((s) => !hitOne(s, 'splat'));
   shells = shells.filter((s) => {
     if (underIcon(s.x, s.y)) return true;
     const dx = s.x - x;
     const dy = s.y - y;
-    return dx * dx + dy * dy > r2;
+    if (dx * dx + dy * dy > r2) return true;
+    if (!s.id) s.id = `shell:${nextId++}`;
+    if (ragHit.has(s.id)) return true;
+    ragHit.add(s.id);
+    ragUses += 1;
+    if (ragUses >= RAG_MAX) washLeftMs = RAG_WASH_MS;
+    return false;
   });
-  corpses = corpses.filter((s) => {
-    const dx = s.x - x;
-    const dy = s.y - y;
-    return dx * dx + dy * dy > r2;
-  });
+  corpses = corpses.filter((s) => !hitOne(s, 'corpse'));
 }
 
 const HANDLE_X = 19;
@@ -2002,7 +2089,7 @@ function swatAt(now) {
     if (inPaddle(eggs[i].x, eggs[i].y)) {
       const e = eggs[i];
       addSplat(e.x, e.y, now, e.seed, 0.35);
-      corpses.push({ kind: 'egg', x: e.x, y: e.y, rot: e.rot, seed: e.seed });
+      corpses.push({ kind: 'egg', x: e.x, y: e.y, rot: e.rot, seed: e.seed, ageMs: 0, wipes: 0, id: nextId++ });
       eggs.splice(i, 1);
       hit = true;
     }
@@ -2012,7 +2099,7 @@ function swatAt(now) {
     if (inPaddle(larvae[i].x, larvae[i].y)) {
       const L = larvae[i];
       addSplat(L.x, L.y, now, L.seed, 0.45 + L.instar * 0.15);
-      corpses.push({ kind: 'larva', x: L.x, y: L.y, heading: L.heading, instar: L.instar, seed: L.seed });
+      corpses.push({ kind: 'larva', x: L.x, y: L.y, heading: L.heading, instar: L.instar, seed: L.seed, ageMs: 0, wipes: 0, id: nextId++ });
       larvae.splice(i, 1);
       hit = true;
     }
@@ -2022,7 +2109,7 @@ function swatAt(now) {
     if (inPaddle(pupae[i].x, pupae[i].y)) {
       const p = pupae[i];
       addSplat(p.x, p.y, now, p.seed, 0.8);
-      corpses.push({ kind: 'pupa', x: p.x, y: p.y, rot: p.rot, seed: p.seed });
+      corpses.push({ kind: 'pupa', x: p.x, y: p.y, rot: p.rot, seed: p.seed, ageMs: 0, wipes: 0, id: nextId++ });
       pupae.splice(i, 1);
       hit = true;
     }
@@ -2042,10 +2129,19 @@ function step(dt, now) {
     try { stepFly(f, dt, now); } catch (err) { console.error(err); }
   }
   flies = flies.filter((f) => f.state !== 'dead');
+  tryParthenogenesis();
+  flies = flies.filter((f) => f.state !== 'dead');
   tryPairAll(now);
   closePairs(now);
   stepLife(dt, now);
   tickFoods(dt, now);
+
+  for (const s of splats) s.ageMs = (s.ageMs || 0) + dt * 1000;
+  for (const c of corpses) c.ageMs = (c.ageMs || 0) + dt * 1000;
+  if (washLeftMs > 0) {
+    washLeftMs = Math.max(0, washLeftMs - dt * 1000);
+    if (washLeftMs === 0) ragUses = 0;
+  }
 
   foodAcc += dt;
   if (foodAcc > 4) {
@@ -2090,12 +2186,14 @@ function drawFood(f) {
 }
 
 function drawSplat(s) {
+  const t = dryT(s);
   ctx.save();
-  ctx.globalAlpha = 0.72;
-  ctx.fillStyle = '#4a1020';
+  ctx.globalAlpha = 0.72 + t * 0.2;
+  const dark = Math.round(16 + (1 - t) * 42);
+  ctx.fillStyle = `rgb(${dark + 20},${Math.round(dark * 0.4)},${Math.round(dark * 0.5)})`;
   ctx.translate(s.x, s.y);
   ctx.rotate(s.seed);
-  const k = s.scale || 1;
+  const k = (s.scale || 1) * (1 - t * 0.28);
   ctx.beginPath();
   ctx.ellipse(0, 0, 10 * k, 6 * k, 0.2, 0, Math.PI * 2);
   ctx.fill();
@@ -2565,33 +2663,45 @@ function drawDeadEgg(c) {
   ctx.beginPath();
   ctx.ellipse(-len * 0.08, 0.2, len * 0.16, len * 0.045, 0, 0, Math.PI * 2);
   ctx.fill();
+  paintDry(c, len * 0.6, len * 0.2);
   ctx.restore();
 }
 
 function drawDeadLarva(c) {
   const instar = c.instar || 1;
   const len = larvaLen(instar);
-  const thick = (1.1 + instar * 0.55) * 0.55;
+  const thick = (1.1 + instar * 0.55) * (instar === 1 ? 0.55 : 0.78);
   ctx.save();
   ctx.translate(c.x, c.y);
   ctx.scale(0.8, 0.8);
   ctx.rotate(c.heading || 0);
   ctx.fillStyle = instar === 1 ? '#cbb89a' : instar === 2 ? '#b39470' : '#8a6e4c';
-  ctx.beginPath();
-  ctx.ellipse(-len * 0.1, 0.45, len * 0.48, thick, 0.38, 0, Math.PI * 2);
-  ctx.fill();
+  if (instar === 1) {
+    ctx.beginPath();
+    ctx.ellipse(-len * 0.1, 0.45, len * 0.48, thick, 0.38, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    const waves = instar === 2 ? 1.7 : 2.4;
+    const amp = instar === 2 ? 2.4 : 3.4;
+    const segs = instar === 2 ? 7 : 9;
+    for (let i = 0; i <= segs; i++) {
+      const u = i / segs;
+      const px = -len * 0.48 + u * len * 0.96;
+      const py = Math.sin(u * Math.PI * waves + (c.seed || 0) * 0.2) * amp;
+      const r = thick * (1.2 - u * 0.4);
+      ctx.beginPath();
+      ctx.ellipse(px, py + 0.3, r * 1.15, r, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
   ctx.strokeStyle = 'rgba(70,50,30,0.4)';
   ctx.lineWidth = 0.7;
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(70,50,30,0.22)';
-  ctx.lineWidth = 0.55;
-  for (let i = 0; i < 3; i++) {
-    const x = -len * 0.28 + i * len * 0.22;
+  if (instar === 1) {
     ctx.beginPath();
-    ctx.moveTo(x, 0.1);
-    ctx.lineTo(x + 0.4, thick + 0.55);
+    ctx.ellipse(-len * 0.1, 0.45, len * 0.48, thick, 0.38, 0, Math.PI * 2);
     ctx.stroke();
   }
+  paintDry(c, len * 0.55, thick * 2.2);
   ctx.restore();
 }
 
@@ -2611,6 +2721,7 @@ function drawDeadPupa(c) {
   ctx.beginPath();
   ctx.ellipse(-1.6, 0.35, 3.1, 0.85, 0.12, 0, Math.PI * 2);
   ctx.fill();
+  paintDry(c, 9, 3);
   ctx.restore();
 }
 
@@ -2643,6 +2754,7 @@ function drawCorpse(c) {
   ctx.scale((c.scale || 1) * (4 / 3), (c.scale || 1) * (4 / 3));
   ctx.rotate((c.heading || 0) + Math.PI / 2);
   drawSide(0, c.seed || 0, false);
+  paintDry(c, 4.2, 5.5);
   ctx.restore();
   Object.assign(COL, saved);
 }
@@ -2722,6 +2834,31 @@ function drawRag() {
   ctx.restore();
 }
 
+function ragWashText() {
+  if (washLeftMs <= 0) return '';
+  const sec = Math.ceil(washLeftMs / 1000);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `抹布太脏了还在洗！${m}:${String(s).padStart(2, '0')}`;
+}
+
+function drawRagWash() {
+  const text = ragWashText();
+  if (!text || mouse.x < -1000) return;
+  ctx.save();
+  ctx.font = '700 16px "Microsoft YaHei UI","Microsoft YaHei",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+  ctx.fillStyle = '#fff6ea';
+  const x = mouse.x;
+  const y = mouse.y - 28;
+  ctx.strokeText(text, x, y);
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
 function drawSwatter() {
   if (mouse.x < -1000) return;
   const { sx, sy, scale } = swatterPose();
@@ -2764,7 +2901,10 @@ function draw(now) {
   for (const c of corpses) drawCorpse(c);
   for (const f of flies) drawFly(f, now);
   if (swatterOn) drawSwatter();
-  if (ragOn) drawRag();
+  if (ragOn) {
+    drawRag();
+    drawRagWash();
+  }
   drawFanfare(now);
 }
 
@@ -2817,11 +2957,27 @@ function publishLife() {
     else if (L.instar === 2) l2 += 1;
     else l3 += 1;
   }
-  let morphs = { wild: 0, mid: 0, deep: 0, white: 0, green: 0, rainbow: 0 };
+  let morphs = {
+    wild: { n: 0, f: 0, m: 0 },
+    mid: { n: 0, f: 0, m: 0 },
+    deep: { n: 0, f: 0, m: 0 },
+    white: { n: 0, f: 0, m: 0 },
+    green: { n: 0, f: 0, m: 0 },
+    rainbow: { n: 0, f: 0, m: 0 },
+  };
+  let adultF = 0;
+  let adultM = 0;
   for (const f of flies) {
-    const m = morphOf(f.geneD, f.geneP, f.geneG, f.geneX, f.geneY);
-    if (morphs[m] == null) morphs.wild += 1;
-    else morphs[m] += 1;
+    const key = morphOf(f.geneD, f.geneP, f.geneG, f.geneX, f.geneY);
+    const slot = morphs[key] || morphs.wild;
+    slot.n += 1;
+    if (f.sex === 'f') {
+      slot.f += 1;
+      adultF += 1;
+    } else {
+      slot.m += 1;
+      adultM += 1;
+    }
   }
   window.fly.sendLife({
     eggs: eggs.length,
@@ -2830,15 +2986,25 @@ function publishLife() {
     l3,
     pupae: pupae.length,
     adults: flies.length,
-    green: morphs.green,
-    rainbow: morphs.rainbow,
-    wild: morphs.wild,
-    mid: morphs.mid,
-    deep: morphs.deep,
-    white: morphs.white,
+    adultF,
+    adultM,
+    green: morphs.green.n,
+    rainbow: morphs.rainbow.n,
+    wild: morphs.wild.n,
+    mid: morphs.mid.n,
+    deep: morphs.deep.n,
+    white: morphs.white.n,
+    wildF: morphs.wild.f, wildM: morphs.wild.m,
+    midF: morphs.mid.f, midM: morphs.mid.m,
+    deepF: morphs.deep.f, deepM: morphs.deep.m,
+    whiteF: morphs.white.f, whiteM: morphs.white.m,
+    greenF: morphs.green.f, greenM: morphs.green.m,
+    rainbowF: morphs.rainbow.f, rainbowM: morphs.rainbow.m,
     breed,
     cleared,
     breedMs,
+    washLeftMs,
+    ragUses,
   });
 }
 
@@ -2899,6 +3065,8 @@ function snapshot() {
     shells: shells.slice(),
     corpses: corpses.slice(),
     splats: splats.map((s) => packTimes({ ...s }, ['t'], now)),
+    ragUses,
+    washLeftMs,
   };
 }
 
@@ -2922,6 +3090,8 @@ function applyRestore(data) {
   shells = data.shells || [];
   corpses = data.corpses || [];
   splats = (data.splats || []).map((s) => unpackTimes({ ...s }, ['t'], now));
+  ragUses = Number(data.ragUses) || 0;
+  washLeftMs = Number(data.washLeftMs) || 0;
   booted = true;
   holdBoot = false;
   extinctSince = 0;
@@ -2941,6 +3111,8 @@ function startFresh() {
   rainbowSeen = false;
   fanfareUntil = 0;
   raiseFanfare(false);
+  ragUses = 0;
+  washLeftMs = 0;
   if (!booted && icons.length) boot();
 }
 
@@ -2979,7 +3151,7 @@ function trackTool(x, y) {
   else {
     mouse.x = clamp(mouse.x, 0, W);
     mouse.y = clamp(mouse.y, 0, H);
-    if (ragWipe) wipeAt(mouse.x, mouse.y);
+    if (ragWipe && washLeftMs <= 0) wipeAt(mouse.x, mouse.y);
   }
 }
 
@@ -2993,11 +3165,15 @@ canvas.addEventListener('mousedown', (e) => {
   if (swatterOn) swatAt(performance.now());
   if (ragOn) {
     ragWipe = true;
+    ragHit = new Set();
     wipeAt(mouse.x, mouse.y);
   }
 });
 
-addEventListener('mouseup', () => { ragWipe = false; });
+addEventListener('mouseup', () => {
+  ragWipe = false;
+  ragHit = new Set();
+});
 
 addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || !(swatterOn || ragOn)) return;
