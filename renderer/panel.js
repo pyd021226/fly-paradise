@@ -121,7 +121,6 @@ $('restart').onclick = () => api.send('restart');
 $('sexM').onchange = () => setSex($('sexM').checked ? 'm' : 'f');
 $('sexF').onchange = () => setSex($('sexF').checked ? 'f' : 'm');
 $('add').onclick = () => api.send('addFly', { sex });
-$('spawnGlow').onclick = () => api.send('spawnGlow');
 $('scare').onclick = () => api.send('scareAll');
 $('fast').onclick = () => api.send('fast');
 $('quit').onclick = () => api.send('quit');
