@@ -1865,8 +1865,20 @@ function stepJar(dt, now) {
   for (const u of jar) {
     u.inMs = (u.inMs || 0) + dt * 1000;
     if (u.kind === 'fly') {
-      u.heading += rand(-2.2, 2.2) * dt;
-      const spd = 55;
+      if (now > (u.turnT || 0)) {
+        u.turnT = now + rand(300, 1000);
+        u.course = (u.heading || 0) + rand(-2.6, 2.6);
+        u.burstMul = 1 + rand(0.2, 0.5);
+        u.burstUntil = now + rand(200, 300);
+      }
+      if (u.course == null) u.course = u.heading;
+      let diff = u.course - u.heading;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      u.heading += diff * Math.min(1, dt * 7);
+      u.heading += Math.sin(now * 0.007 + u.seed) * 0.8 * dt;
+      const b = now < (u.burstUntil || 0) ? (u.burstMul || 1) : 1;
+      const spd = 30 * b;
       u.vx = Math.cos(u.heading) * spd;
       u.vy = Math.sin(u.heading) * spd;
       u.x += u.vx * dt;
