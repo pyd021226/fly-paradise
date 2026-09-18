@@ -11,25 +11,45 @@
       --btn: #fffdf8;
       --line: #ddd4c6;
       --pink: #e23d7a;
+      --pink-soft: #fbe4ed;
+      --card-shadow: 0 8px 24px rgba(73, 55, 34, 0.06);
     }
     html, body {
       margin: 0;
-      background: var(--bg);
+      background: radial-gradient(circle at 15% 0%, #fffaf0 0, var(--bg) 42%);
       color: var(--ink);
       font: 14px/1.45 "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
       user-select: none;
     }
-    main { padding: 18px 16px 16px; }
+    * { box-sizing: border-box; }
+    html { overflow-x: hidden; overflow-y: auto; }
+    ::-webkit-scrollbar { width: 12px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+    ::-webkit-scrollbar-thumb {
+      min-height: 40px;
+      background: #a79a87;
+      background-clip: content-box;
+      border: 4px solid transparent;
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover { background-color: #817563; }
+    @media (max-width: 280px) {
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-thumb { border-width: 2px; }
+    }
+    main { padding: 16px; }
+    .hero { margin-bottom: 12px; }
     h1 {
-      font-size: 17px;
-      font-weight: 650;
+      font-size: 20px;
+      font-weight: 720;
       margin: 0 0 4px;
     }
     p.hint {
       color: var(--muted);
       font-size: 12px;
-      margin: 0 0 16px;
-      min-height: 2.6em;
+      margin: 0 0 10px;
+      min-height: 2.8em;
     }
     button {
       display: block;
@@ -37,8 +57,8 @@
       border: 1px solid var(--line);
       background: var(--btn);
       color: var(--ink);
-      border-radius: 10px;
-      padding: 11px 12px;
+      border-radius: 12px;
+      padding: 9px 10px;
       margin: 0 0 8px;
       font: inherit;
       cursor: pointer;
@@ -50,7 +70,7 @@
       color: #fff;
       border-color: transparent;
       font-weight: 650;
-      padding: 14px 12px;
+      padding: 11px 10px;
       font-size: 15px;
       margin-bottom: 12px;
     }
@@ -67,24 +87,35 @@
       margin-bottom: 8px;
     }
     .row button { margin: 0; }
-    .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(0,0,0,0.2); }
+    .tools { align-items: stretch; }
+    .tools button { font-size: 13px; padding: 11px 4px; }
+    button:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
     .stats {
       margin: 0 0 14px;
-      padding: 10px 12px;
+      padding: 12px;
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: 14px;
       background: var(--btn);
-      font-size: 12px;
-      line-height: 1.65;
+      box-shadow: var(--card-shadow);
+      font-size: 11px;
       color: var(--ink);
     }
-    .stats .m { display: block; }
+    .life-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; padding-bottom: 10px; border-bottom: 1px solid #eee6da; }
+    .life-cell { text-align: center; min-width: 0; }
+    .life-value { display: block; font-size: 15px; font-weight: 700; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .life-value.compact { font-size: clamp(8px, 3.2vw, 11px); letter-spacing: -0.55px; text-overflow: clip; }
+    .life-label { color: var(--muted); font-size: 10px; }
+    .morph-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; margin-top: 10px; }
+    .morph { display: flex; align-items: center; justify-content: space-between; min-width: 0; color: #51483d; }
+    .morph-name { display: flex; align-items: center; min-width: 0; }
+    .dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; margin-right: 5px; border: 1px solid rgba(0,0,0,.12); }
+    .section-label { margin: 0 0 6px 2px; color: var(--muted); font-size: 11px; letter-spacing: .08em; }
     .add-row {
       display: grid;
       grid-template-columns: 1fr auto auto;
       gap: 10px;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
     .add-row button { margin: 0; }
     .add-row label {
@@ -102,7 +133,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      margin: 18px 0 0;
+      margin: 10px 0 0;
       color: var(--muted);
       font-size: 12px;
       cursor: pointer;
@@ -114,6 +145,10 @@
       font-size: 12px;
       line-height: 1.45;
     }
+    .utility { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin-top: 12px; }
+    .utility button { width: auto; min-width: 78px; margin: 0; color: #7b5141; background: transparent; }
+    .utility .foot { margin: 0; }
+    .primary { box-shadow: 0 6px 15px rgba(226, 61, 122, .18); }
     #gate { display: none; }
     body.gate main > :not(#gate) { display: none; }
     body.gate #gate { display: block; }
@@ -127,22 +162,32 @@
       <button class="primary" id="resume" type="button">继续</button>
       <button id="restart" type="button">重新开始</button>
     </div>
-    <h1>果蝇乐园</h1>
-    <p class="hint" id="hint">苍蝇在桌面上。点下面拿拍去打，Esc 收起。</p>
-    <div class="stats" id="stats">成虫 0　卵 0　蛆 0/0/0　蛹 0<br><span class="m">褐色（A_B_C_/A_B_cc） 0</span><span class="m">中褐（A_bbC_/A_bbcc） 0</span><span class="m">深褐（aaB_C_/aaB_cc） 0</span><span class="m">白色（aabbC_） 0</span><span class="m">绿色（aabbcc） 0</span></div>
+    <header class="hero">
+      <h1>果蝇乐园</h1>
+      <p class="hint" id="hint">苍蝇在桌面上。点下面拿拍去打，Esc 收起。</p>
+    </header>
+    <div class="stats" id="stats"></div>
+    <p class="section-label">观察与清理</p>
     <button id="xray" type="button">全图透视</button>
-    <button class="primary" id="swatter" type="button">拿出苍蝇拍</button>
-    <button id="rag" type="button">拿出抹布</button>
-    <p class="note">按 Esc 退出</p>
+    <div class="row tools">
+      <button class="primary" id="swatter" type="button">拿出苍蝇拍</button>
+      <button id="rag" type="button">拿出抹布</button>
+    </div>
+    <p class="note">Esc 收起工具；最小化后可继续在桌面使用。</p>
+    <p class="section-label">种群操作</p>
     <div class="add-row">
       <button id="add" type="button">加一只</button>
       <label><input id="sexF" type="checkbox">雌</label>
       <label><input id="sexM" type="checkbox" checked>雄</label>
     </div>
-    <button id="scare" type="button">吓它们</button>
-    <button id="fast" type="button">快进</button>
-    <button id="quit" type="button">退出</button>
-    <label class="foot"><input id="autoStart" type="checkbox">开机启动</label>
+    <div class="row">
+      <button id="scare" type="button">吓它们</button>
+      <button id="fast" type="button" title="快进时各阶段约 1.5 秒">快进</button>
+    </div>
+    <div class="utility">
+      <label class="foot"><input id="autoStart" type="checkbox">开机启动</label>
+      <button id="quit" type="button">退出</button>
+    </div>
   </main>
   <script src="./panel.js"></script>
 </body>

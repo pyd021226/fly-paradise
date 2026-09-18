@@ -1,0 +1,53 @@
+export function drawTexturedRag(ctx, x, y, { wiping = false } = {}) {
+  const size = 46;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.16 + Math.sin(x * 0.013 + y * 0.009) * 0.035);
+  ctx.scale(wiping ? 1.05 : 1, wiping ? 0.92 : 1);
+  ctx.shadowColor = 'rgba(38,30,20,0.28)';
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 4;
+  const cloth = new Path2D();
+  cloth.moveTo(-size * .48, -size * .35);
+  cloth.quadraticCurveTo(-size * .43, -size * .5, -size * .25, -size * .46);
+  cloth.quadraticCurveTo(0, -size * .39, size * .22, -size * .47);
+  cloth.quadraticCurveTo(size * .46, -size * .48, size * .48, -size * .28);
+  cloth.quadraticCurveTo(size * .4, 0, size * .49, size * .29);
+  cloth.quadraticCurveTo(size * .39, size * .49, size * .18, size * .43);
+  cloth.quadraticCurveTo(-size * .05, size * .36, -size * .28, size * .46);
+  cloth.quadraticCurveTo(-size * .5, size * .42, -size * .46, size * .2);
+  cloth.quadraticCurveTo(-size * .38, 0, -size * .48, -size * .35);
+  cloth.closePath();
+  const base = ctx.createLinearGradient(-size / 2, -size / 2, size / 2, size / 2);
+  base.addColorStop(0, '#f5ead0');
+  base.addColorStop(.42, '#d9c7a0');
+  base.addColorStop(.72, '#efe1bf');
+  base.addColorStop(1, '#c5ad82');
+  ctx.fillStyle = base;
+  ctx.fill(cloth);
+  ctx.shadowColor = 'transparent';
+  ctx.save();
+  ctx.clip(cloth);
+  ctx.globalAlpha = .22;
+  ctx.lineWidth = .55;
+  for (let i = -20; i <= 20; i += 3) {
+    ctx.strokeStyle = i % 6 ? '#fff8e5' : '#8f7756';
+    ctx.beginPath(); ctx.moveTo(-size / 2, i); ctx.quadraticCurveTo(0, i + Math.sin(i) * 2, size / 2, i - 1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(i, -size / 2); ctx.quadraticCurveTo(i - 2, 0, i + 1, size / 2); ctx.stroke();
+  }
+  const fold = ctx.createLinearGradient(-8, -size / 2, 10, size / 2);
+  fold.addColorStop(0, 'rgba(80,55,30,0)');
+  fold.addColorStop(.45, 'rgba(90,60,30,.2)');
+  fold.addColorStop(.6, 'rgba(255,250,225,.38)');
+  fold.addColorStop(1, 'rgba(80,55,30,0)');
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = fold;
+  ctx.fillRect(-size / 2, -size / 2, size, size);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(105,82,52,.72)';
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([2, 2]);
+  ctx.stroke(cloth);
+  ctx.setLineDash([]);
+  ctx.restore();
+}
