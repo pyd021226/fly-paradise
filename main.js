@@ -662,6 +662,8 @@ if (!app.requestSingleInstanceLock()) {
         putAwaySwatter();
       } else if (name === 'addFly') {
         send('cmd', { name: 'addFly', morph: msg.morph, sex: msg.sex });
+      } else if (name === 'spawnGlow') {
+        send('cmd', { name: 'spawnGlow' });
       } else if (name === 'scareAll') {
         send('cmd', { name: 'scareAll' });
       } else if (name === 'pause') {

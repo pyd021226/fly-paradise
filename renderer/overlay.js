@@ -1792,6 +1792,7 @@ function intoJar(kind, extra) {
     instar: extra.instar || 1,
     scale: extra.scale || 1,
     seed: extra.seed || rand(0, 80),
+    glow: !!extra.glow,
     t: extra.t || performance.now(),
     inMs: 0,
   });
@@ -2055,7 +2056,7 @@ function drawBottle(now) {
           x: u.x, y: u.y, scale: (u.scale || 1) * 1.5, sex: u.sex,
           visHead: u.heading, heading: u.heading, state: 'fly',
           seed: u.seed, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG,
-          geneX: u.geneX, geneY: u.geneY, crawling: false, mateRole: 0,
+          geneX: u.geneX, geneY: u.geneY, crawling: false, mateRole: 0, glow: u.glow,
         }, now);
       }
     } else if (u.kind === 'egg') {
@@ -2276,7 +2277,10 @@ function eclose(p, now) {
   f.vx = Math.cos(f.heading) * 320;
   f.vy = Math.sin(f.heading) * 320;
   f.takeoffUntil = now + 700;
-  if (morphOf(f.geneD, f.geneP, f.geneG, f.geneX, f.geneY) === 'rainbow') playRainbowFanfare(now);
+  if (morphOf(f.geneD, f.geneP, f.geneG, f.geneX, f.geneY) === 'rainbow') {
+    if (Math.random() < 0.05) f.glow = true;
+    playRainbowFanfare(now);
+  }
   noteFirstEclose(p.firstOf, now);
   return true;
 }
@@ -2290,6 +2294,22 @@ function noteFirstEclose(firstOf, now) {
     parent.kidSeen = true;
     parent.kidDieAt = now + wait;
   }
+}
+
+function spawnGlow() {
+  const f = spawnFly(W * 0.5, H * 0.4, {
+    force: true, geneD: 2, geneP: 2, geneG: 2, geneX: 2, geneY: 2, sex: Math.random() < 0.5 ? 'm' : 'f',
+  });
+  if (!f) return;
+  f.glow = true;
+  f.needMeal = true;
+  f.state = 'fly';
+  f.mission = 'land';
+  f.heading = rand(0, Math.PI * 2);
+  f.visHead = f.heading;
+  f.vx = Math.cos(f.heading) * 320;
+  f.vy = Math.sin(f.heading) * 320;
+  f.takeoffUntil = performance.now() + 700;
 }
 
 function foodOpen(food) {
@@ -3165,6 +3185,18 @@ function drawFly(fly, now) {
   applyBody(fly, fly.sex === 'm', false, now);
   ctx.save();
   ctx.translate(fly.x, fly.y);
+  if (fly.glow) {
+    const pulse = 0.55 + 0.45 * Math.sin(now * 0.005 + fly.seed);
+    const r = 18 * pulse;
+    const g = ctx.createRadialGradient(0, 0, 1, 0, 0, r);
+    g.addColorStop(0, 'rgba(255,246,180,0.9)');
+    g.addColorStop(0.5, 'rgba(255,220,120,0.32)');
+    g.addColorStop(1, 'rgba(255,220,120,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
   if (fly.state === 'mate') {
     ctx.translate(fly.mateRole ? 5 : 0, fly.mateRole ? -4 : 0);
     ctx.rotate(Math.sin(now * 0.02 + fly.seed) * 0.18);
@@ -3877,6 +3909,7 @@ if (api) {
       }
       spawnFromEdge(1, opts);
     }
+    if (d.name === 'spawnGlow') spawnGlow();
     if (d.name === 'scareAll') scareAll(performance.now());
     if (d.name === 'boot') boot();
     if (d.name === 'startFresh') startFresh();
