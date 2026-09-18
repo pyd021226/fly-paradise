@@ -63,7 +63,8 @@ function dryMin(stain) {
 }
 
 function dryAge(stain) {
-  return Math.min(DRY_MAX_MIN, (stain.ageMs || 0) / 60000);
+  const ms = stain.dryMs != null ? stain.dryMs : (stain.ageMs || 0);
+  return Math.min(DRY_MAX_MIN, ms / 60000);
 }
 
 function dryT(stain) {
@@ -2191,8 +2192,14 @@ function step(dt, now) {
   tickFoods(dt, now);
 
   const dryDt = fast ? dt * (RIPE_MS / FAST_MS) : dt;
-  for (const s of splats) s.ageMs = (s.ageMs || 0) + dryDt * 1000;
-  for (const c of corpses) c.ageMs = (c.ageMs || 0) + dryDt * 1000;
+  for (const s of splats) {
+    s.ageMs = (s.ageMs || 0) + dt * 1000;
+    s.dryMs = (s.dryMs || 0) + dryDt * 1000;
+  }
+  for (const c of corpses) {
+    c.ageMs = (c.ageMs || 0) + dt * 1000;
+    c.dryMs = (c.dryMs || 0) + dryDt * 1000;
+  }
   if (washLeftMs > 0) {
     washLeftMs = Math.max(0, washLeftMs - dt * 1000);
     if (washLeftMs === 0) ragUses = 0;
@@ -2241,19 +2248,26 @@ function drawFood(f) {
 }
 
 function drawSplat(s) {
-  const m = dryAge(s);
-  const t = m / DRY_MAX_MIN;
-  const base = [
+  const t = dryAge(s) / DRY_MAX_MIN;
+  const oldCol = [74, 16, 32];
+  const newCol = [
     74 + (58 - 74) * t,
     16 + (40 - 16) * t,
     32 + (18 - 32) * t,
   ];
-  const center = dryLighten(base, s);
-  const ring = dryDarken(base, s);
+  const mixed = [
+    (oldCol[0] + newCol[0]) * 0.5,
+    (oldCol[1] + newCol[1]) * 0.5,
+    (oldCol[2] + newCol[2]) * 0.5,
+  ];
+  const center = dryLighten(mixed, s);
+  const ring = dryDarken(mixed, s);
+  const midA = 0.72 + (0.6 - 0.72) * t;
   ctx.save();
   ctx.translate(s.x, s.y);
   ctx.rotate(s.seed);
   const k = s.scale || 1;
+  ctx.globalAlpha = midA;
   ctx.fillStyle = center;
   ctx.beginPath();
   ctx.ellipse(0, 0, 10 * k, 6 * k, 0.2, 0, Math.PI * 2);
@@ -2261,6 +2275,7 @@ function drawSplat(s) {
   ctx.beginPath();
   ctx.ellipse(7 * k, -3 * k, 3 * k, 2 * k, 0.8, 0, Math.PI * 2);
   ctx.fill();
+  ctx.globalAlpha = Math.min(0.9, midA + 0.18);
   ctx.strokeStyle = ring;
   ctx.lineWidth = 1.35 + t * 0.5;
   ctx.beginPath();
