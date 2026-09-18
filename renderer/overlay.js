@@ -644,6 +644,7 @@ function syncBinFood() {
 }
 
 function spawnWeight(ic) {
+  if (!ic || ic.source === 'grid') return 0;
   if (ic.recycleBin) return 0;
   if (recentlyLaunched(ic)) return 0;
   if (ic.nearBin) {
@@ -1020,39 +1021,14 @@ function stepFly(fly, dt, now) {
   }
 
   if (fly.kidDieAt && !fly.dieAt && now >= fly.kidDieAt) {
-    addSplat(fly.x, fly.y, now, fly.seed, 1);
-    corpses.push({
-      x: fly.x,
-      y: fly.y,
-      heading: fly.visHead || fly.heading || 0,
-      seed: fly.seed,
-      scale: fly.scale || 1,
-      sex: fly.sex,
-      geneD: fly.geneD,
-      geneP: fly.geneP,
-      geneG: fly.geneG,
-      geneX: fly.geneX,
-      geneY: fly.geneY,
-    });
+    corpses.push(flyCorpse(fly));
     fly.state = 'dead';
     return;
   }
 
   if (fly.dieAt) {
     if (now >= fly.dieAt) {
-      corpses.push({
-        x: fly.x,
-        y: fly.y,
-        heading: fly.visHead || fly.heading || 0,
-        seed: fly.seed,
-        scale: fly.scale || 1,
-        sex: fly.sex,
-        geneD: fly.geneD,
-        geneP: fly.geneP,
-        geneG: fly.geneG,
-        geneX: fly.geneX,
-        geneY: fly.geneY,
-      });
+      corpses.push(flyCorpse(fly));
       fly.state = 'dead';
       return;
     }
@@ -1417,9 +1393,27 @@ audKill.addEventListener('ended', () => {
   audSwatter.play().catch(() => {});
 });
 
+function flyCorpse(fly) {
+  return {
+    kind: 'fly',
+    x: fly.x,
+    y: fly.y,
+    heading: fly.visHead || fly.heading || 0,
+    seed: fly.seed,
+    scale: fly.scale || 1,
+    sex: fly.sex,
+    geneD: fly.geneD,
+    geneP: fly.geneP,
+    geneG: fly.geneG,
+    geneX: fly.geneX,
+    geneY: fly.geneY,
+  };
+}
+
 function killFly(fly, now) {
   fly.state = 'dead';
   addSplat(fly.x, fly.y, now, fly.seed, 1);
+  corpses.push(flyCorpse(fly));
   playKillMusic();
 }
 
@@ -2006,7 +2000,9 @@ function swatAt(now) {
   for (let i = eggs.length - 1; i >= 0; i--) {
     if (underIcon(eggs[i].x, eggs[i].y)) continue;
     if (inPaddle(eggs[i].x, eggs[i].y)) {
-      addSplat(eggs[i].x, eggs[i].y, now, eggs[i].seed, 0.35);
+      const e = eggs[i];
+      addSplat(e.x, e.y, now, e.seed, 0.35);
+      corpses.push({ kind: 'egg', x: e.x, y: e.y, rot: e.rot, seed: e.seed });
       eggs.splice(i, 1);
       hit = true;
     }
@@ -2014,7 +2010,9 @@ function swatAt(now) {
   for (let i = larvae.length - 1; i >= 0; i--) {
     if (underIcon(larvae[i].x, larvae[i].y)) continue;
     if (inPaddle(larvae[i].x, larvae[i].y)) {
-      addSplat(larvae[i].x, larvae[i].y, now, larvae[i].seed, 0.45 + larvae[i].instar * 0.15);
+      const L = larvae[i];
+      addSplat(L.x, L.y, now, L.seed, 0.45 + L.instar * 0.15);
+      corpses.push({ kind: 'larva', x: L.x, y: L.y, heading: L.heading, instar: L.instar, seed: L.seed });
       larvae.splice(i, 1);
       hit = true;
     }
@@ -2022,7 +2020,9 @@ function swatAt(now) {
   for (let i = pupae.length - 1; i >= 0; i--) {
     if (underIcon(pupae[i].x, pupae[i].y)) continue;
     if (inPaddle(pupae[i].x, pupae[i].y)) {
-      addSplat(pupae[i].x, pupae[i].y, now, pupae[i].seed, 0.8);
+      const p = pupae[i];
+      addSplat(p.x, p.y, now, p.seed, 0.8);
+      corpses.push({ kind: 'pupa', x: p.x, y: p.y, rot: p.rot, seed: p.seed });
       pupae.splice(i, 1);
       hit = true;
     }
@@ -2549,7 +2549,84 @@ function drawFly(fly, now) {
   ctx.restore();
 }
 
+function drawDeadEgg(c) {
+  const len = ADULT_LEN / 5;
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.rotate(c.rot || 0);
+  ctx.fillStyle = '#c4b496';
+  ctx.strokeStyle = 'rgba(90,70,50,0.55)';
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  ctx.ellipse(0, 0.2, len * 0.52, len * 0.11, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(70,50,35,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(-len * 0.08, 0.2, len * 0.16, len * 0.045, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawDeadLarva(c) {
+  const instar = c.instar || 1;
+  const len = larvaLen(instar);
+  const thick = (1.1 + instar * 0.55) * 0.55;
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.scale(0.8, 0.8);
+  ctx.rotate(c.heading || 0);
+  ctx.fillStyle = instar === 1 ? '#cbb89a' : instar === 2 ? '#b39470' : '#8a6e4c';
+  ctx.beginPath();
+  ctx.ellipse(-len * 0.1, 0.45, len * 0.48, thick, 0.38, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(70,50,30,0.4)';
+  ctx.lineWidth = 0.7;
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(70,50,30,0.22)';
+  ctx.lineWidth = 0.55;
+  for (let i = 0; i < 3; i++) {
+    const x = -len * 0.28 + i * len * 0.22;
+    ctx.beginPath();
+    ctx.moveTo(x, 0.1);
+    ctx.lineTo(x + 0.4, thick + 0.55);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawDeadPupa(c) {
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.scale(0.8, 0.8);
+  ctx.rotate(c.rot || 0);
+  ctx.fillStyle = '#4a2814';
+  ctx.beginPath();
+  ctx.ellipse(0, 0.45, 8.4, 2.05, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(20,8,4,0.5)';
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(20,8,4,0.38)';
+  ctx.beginPath();
+  ctx.ellipse(-1.6, 0.35, 3.1, 0.85, 0.12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawCorpse(c) {
+  if (c.kind === 'egg') {
+    drawDeadEgg(c);
+    return;
+  }
+  if (c.kind === 'larva') {
+    drawDeadLarva(c);
+    return;
+  }
+  if (c.kind === 'pupa') {
+    drawDeadPupa(c);
+    return;
+  }
   const saved = {
     eye: COL.eye, eyeDark: COL.eyeDark, eyeHi: COL.eyeHi,
     thorax: COL.thorax, thoraxDark: COL.thoraxDark,
@@ -2959,12 +3036,16 @@ if (api) {
       if (f.perch) f.perch = nearest(f.x, f.y) || f.perch;
       if (f.target) f.target = icons.find((i) => i.name === f.target.name) || f.target;
     }
-    for (const f of foods) {
-      if (!icons.find((i) => i.id === f.iconId)) {
-        const ic = nearest(f.x, f.y);
-        if (ic) f.iconId = ic.id;
-      }
-    }
+    foods = foods.filter((f) => {
+      if (f.infinite) return true;
+      const ic = icons.find((i) => i.id === f.iconId) || nearest(f.x, f.y);
+      if (!ic || ic.source === 'grid') return false;
+      const cx = ic.x + ic.w * 0.55;
+      const cy = ic.y + ic.h * 0.42;
+      if (Math.hypot(f.x - cx, f.y - cy) > 64) return false;
+      f.iconId = ic.id;
+      return true;
+    });
     if (!booted && !holdBoot && icons.length) boot();
     syncBinFood();
   });

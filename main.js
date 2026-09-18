@@ -7,7 +7,7 @@ import {
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { listDesktopIconsGrid, fetchLiveIcons } from './src/icons.js';
+import { fetchLiveIcons } from './src/icons.js';
 import { fetchIconRects } from './src/icon-rects.js';
 import { startRawMouse, stopRawMouse } from './src/raw-mouse.js';
 import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs } from './src/desktop-layer.js';
@@ -294,7 +294,6 @@ let lmbWas = false;
 let press = null;
 let lastClick = null;
 const LAUNCH_MS = 30 * 60 * 1000;
-let iconsLiveAt = 0;
 
 function pruneLaunches() {
   const now = Date.now();
@@ -356,11 +355,12 @@ function toOverlayIcons(list, physical) {
   });
 }
 
-let slowIconAt = 0;
 let uiaNames = null;
 let nameAt = 0;
 let binAt = 0;
 let binHasCached = false;
+let binName = '';
+let binIndex = -1;
 
 function fakeName(name) {
   const s = String(name || '').trim();
@@ -411,49 +411,48 @@ function mergeNames(live) {
   });
 }
 
+function rememberBin(list) {
+  list.forEach((ic, i) => {
+    if (isRecycleBinName(ic.name)) {
+      binName = String(ic.name);
+      binIndex = i;
+    }
+  });
+}
+
+function decorateIcons(list, physical) {
+  const binHas = recycleCached();
+  return toOverlayIcons(list, physical).map((ic, i) => {
+    const isBin = isRecycleBinName(ic.name)
+      || (binName && ic.name === binName)
+      || (binIndex >= 0 && i === binIndex);
+    return {
+      ...ic,
+      recycleBin: !!(binHas && isBin),
+      lastLaunch: launches.get(ic.name) || launches.get(ic.id) || 0,
+    };
+  });
+}
+
 function publishIcons() {
   if (!overlay || overlay.isDestroyed()) return;
   if (toolOn()) return;
-  if (Date.now() < iconsLiveAt) {
-    send('icons', { icons: toOverlayIcons(listDesktopIconsGrid(screen), false) });
-    return;
-  }
   const now = Date.now();
-  const wantNames = now - nameAt > 8000;
-  if (wantNames) {
+  if (now - nameAt > 8000) {
     nameAt = now;
     fetchLiveIcons().then((slow) => {
       if (slow && slow.length) uiaNames = slow;
     });
   }
-  const live = fetchIconRects({ names: wantNames });
+  const live = fetchIconRects({ names: !binName });
   if (live && live.length) {
     lastLive = mergeNames(keepNames(live));
+    rememberBin(lastLive);
     pruneLaunches();
-    const binHas = recycleCached();
-    const mapped = toOverlayIcons(lastLive, true).map((ic) => ({
-      ...ic,
-      recycleBin: binHas && isRecycleBinName(ic.name),
-      lastLaunch: launches.get(ic.name) || launches.get(ic.id) || 0,
-    }));
-    send('icons', { icons: mapped });
+    send('icons', { icons: decorateIcons(lastLive, true) });
     return;
   }
-  if (lastLive && lastLive.length) {
-    send('icons', { icons: toOverlayIcons(lastLive, true) });
-    return;
-  }
-  if (now - slowIconAt < 2500) return;
-  slowIconAt = now;
-  fetchLiveIcons().then((slow) => {
-    if (!overlay || overlay.isDestroyed()) return;
-    if (slow && slow.length) {
-      lastLive = slow;
-      send('icons', { icons: toOverlayIcons(slow, true) });
-      return;
-    }
-    send('icons', { icons: toOverlayIcons(listDesktopIconsGrid(screen), false) });
-  });
+  if (lastLive && lastLive.length) send('icons', { icons: decorateIcons(lastLive, true) });
 }
 
 let prevCursor = null;
@@ -533,7 +532,6 @@ if (!app.requestSingleInstanceLock()) {
     panel = createPanel();
     panel.once('ready-to-show', () => panel.show());
     panel.show();
-    iconsLiveAt = Date.now() + 2500;
 
     setTimeout(() => {
       if (!overlay || overlay.isDestroyed()) return;

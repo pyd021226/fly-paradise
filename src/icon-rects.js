@@ -154,7 +154,7 @@ export function fetchIconRects({ names = false } = {}) {
     if (!GetWindowRect(s.lv, wrBuf)) return null;
     const wrL = wrBuf.readInt32LE(0);
     const wrT = wrBuf.readInt32LE(4);
-    const n = Math.min(cnt.value, 80);
+    const n = Math.min(cnt.value, 200);
     const out = [];
     for (let i = 0; i < n; i++) {
       init.writeInt32LE(LVIR_ICON, 0);
