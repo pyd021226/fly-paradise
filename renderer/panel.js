@@ -21,9 +21,27 @@ function ragWashHint(s) {
 }
 
 let lastLife = { cleared: false, breedMs: 0, breed: true };
+let lastState = {};
 let isAnnoy = false;
 
+function ragWashing() {
+  return (Number(lastLife.washLeftMs) || 0) > 0;
+}
+
+function paintRagBtn(rag) {
+  const btn = $('rag');
+  if (!btn) return;
+  if (ragWashing()) {
+    btn.textContent = `洗! ${fmtMs(lastLife.washLeftMs)}`;
+    btn.classList.add('on');
+  } else {
+    btn.textContent = rag ? '收起抹布' : '拿出抹布';
+    btn.classList.toggle('on', rag);
+  }
+}
+
 function render(s) {
+  lastState = s || {};
   const on = !!s.swatterOn;
   const rag = !!s.ragOn;
   const watch = !!s.watch;
@@ -36,8 +54,7 @@ function render(s) {
   const btn = $('swatter');
   btn.textContent = on ? '收起苍蝇拍' : '拿出苍蝇拍';
   btn.classList.toggle('on', on);
-  $('rag').textContent = rag ? '收起抹布' : '拿出抹布';
-  $('rag').classList.toggle('on', rag);
+  paintRagBtn(rag);
   $('xray').classList.toggle('on', watch);
   $('xray').textContent = watch ? '透视中' : '全图透视';
   $('fast').classList.toggle('on', fast);
@@ -45,6 +62,8 @@ function render(s) {
   $('autoStart').checked = autoStart;
   if (on) {
     $('hint').textContent = '拍子跟着鼠标。左键打。Esc 还鼠标；点退出或关窗口随时能关。';
+  } else if (ragWashing()) {
+    $('hint').textContent = ragWashHint(lastLife);
   } else if (rag) {
     const wash = ragWashHint(lastLife);
     $('hint').textContent = wash || '抹布跟着鼠标。按住拖动能擦掉汁、尸体和空蛹壳。Esc 收起。';
@@ -70,7 +89,10 @@ function setSex(next) {
 }
 
 $('swatter').onclick = () => api.send('swatter');
-$('rag').onclick = () => api.send('rag');
+$('rag').onclick = () => {
+  if (ragWashing()) api.send('wash');
+  else api.send('rag');
+};
 $('xray').onclick = () => api.send('xray');
 $('autoStart').onchange = () => api.send('autostart');
 $('resume').onclick = () => api.send('resume');
@@ -109,10 +131,11 @@ if (api.onLife) {
       line += `<br>${last.cleared ? '通关' : '计时'} ${fmtMs(last.breedMs)}`;
     }
     el.innerHTML = line;
+    paintRagBtn(!!lastState.ragOn);
     const wash = ragWashHint(last);
-    if (wash && $('rag').classList.contains('on')) $('hint').textContent = wash;
+    if (wash) $('hint').textContent = wash;
     const hint = $('hint');
-    if (hint && last.cleared && last.breed && !document.body.classList.contains('gate')) {
+    if (hint && last.cleared && last.breed && !document.body.classList.contains('gate') && !wash) {
       const sw = $('swatter');
       if (sw && !sw.classList.contains('on') && !$('rag').classList.contains('on')) {
         hint.textContent = `通关！12 只全绿，用时 ${fmtMs(lastLife.breedMs)}。`;

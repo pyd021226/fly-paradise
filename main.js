@@ -592,6 +592,8 @@ if (!app.requestSingleInstanceLock()) {
         ragOn = !ragOn;
         if (ragOn) swatterOn = false;
         applyTool();
+      } else if (name === 'wash') {
+        send('cmd', { name: 'wash' });
       } else if (name === 'swatter-off') {
         putAwaySwatter();
       } else if (name === 'addFly') {

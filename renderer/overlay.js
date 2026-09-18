@@ -2021,6 +2021,14 @@ function stepLife(dt, now) {
   }
 }
 
+function startWash() {
+  if (washLeftMs > 0) return;
+  washLeftMs = RAG_WASH_MS;
+  ragWipe = false;
+  ragHit = new Set();
+  window.fly?.putAway?.();
+}
+
 function wipeAt(x, y) {
   if (washLeftMs > 0) return;
   const r2 = RAG_R * RAG_R;
@@ -2033,7 +2041,7 @@ function wipeAt(x, y) {
     ragHit.add(s.id);
     s.wipes = (s.wipes || 0) + 1;
     ragUses += 1;
-    if (ragUses >= RAG_MAX) washLeftMs = RAG_WASH_MS;
+    if (ragUses >= RAG_MAX) startWash();
     return s.wipes >= wipesNeed(s);
   };
   splats = splats.filter((s) => !hitOne(s, 'splat'));
@@ -2046,7 +2054,7 @@ function wipeAt(x, y) {
     if (ragHit.has(s.id)) return true;
     ragHit.add(s.id);
     ragUses += 1;
-    if (ragUses >= RAG_MAX) washLeftMs = RAG_WASH_MS;
+    if (ragUses >= RAG_MAX) startWash();
     return false;
   });
   corpses = corpses.filter((s) => !hitOne(s, 'corpse'));
@@ -3325,6 +3333,10 @@ if (api) {
       if (d.watch != null) watch = !!d.watch;
     }
     if (d.name === 'watch') watch = !!d.value;
+    if (d.name === 'wash') {
+      if (washLeftMs > 0) washLeftMs = Math.max(0, washLeftMs - 2000);
+      if (washLeftMs === 0) ragUses = 0;
+    }
     if (d.name === 'breed') {
       if (!flavorAnnoy) {
         breed = !!d.value;
