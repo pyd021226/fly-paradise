@@ -1,0 +1,46 @@
+name: CI
+
+# 每次推送到 master / 提 PR 都完整打一遍包（两个版本的安装包 + 便携版），
+# 产物挂在 workflow 的 Artifacts 里供下载，不发 Release。
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: package (安装包 + 便携版)
+    runs-on: windows-latest
+    env:
+      # 没配签名证书，跳过 electron-builder 的签名探测
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # build.mjs 会逐个口味打包，并核对 release/ 里的产物文件名和 app.asar 里的 flavor.json，
+      # 对不上直接失败，避免打出口味串了的包
+      - name: Package breed + annoy (nsis + portable)
+        run: npm run dist:all
+
+      - name: Show artifacts
+        shell: bash
+        run: ls -la release/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fly-paradise-windows
+          path: |
+            release/*.exe
+            release/SHA256SUMS.txt
+          if-no-files-found: error

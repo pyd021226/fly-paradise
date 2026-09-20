@@ -27,6 +27,21 @@ function loadFlavor() {
 const flavor = loadFlavor();
 const isAnnoy = flavor === 'annoy';
 
+// 便携版（electron-builder portable 目标）运行时由外壳注入这两个变量。
+// 存档放到 exe 同级目录，整个文件夹拷走就是完整的使用记录；目录不可写（只读盘、
+// 网络盘）时保留默认的 %APPDATA%，不让程序起不来。
+const PORTABLE_DIR = process.env.PORTABLE_EXECUTABLE_DIR || '';
+const PORTABLE_EXE = process.env.PORTABLE_EXECUTABLE_FILE || '';
+if (PORTABLE_DIR) {
+  const dataDir = path.join(PORTABLE_DIR, isAnnoy ? 'fly-paradise-welfare-data' : 'fly-paradise-data');
+  try {
+    fs.mkdirSync(dataDir, { recursive: true });
+    app.setPath('userData', dataDir);
+  } catch (err) {
+    process.stderr.write(`[portable] 数据目录写不了，改用默认位置：${err.message}\n`);
+  }
+}
+
 let STATS_FILE = '';
 let SAVE_FILE = '';
 let SETTINGS_FILE = '';
@@ -94,7 +109,11 @@ function putAwaySwatter() {
 
 function applyAutoStart() {
   const opts = { openAtLogin: autoStart, enabled: autoStart, name: '果蝇乐园' };
-  if (app.isPackaged) {
+  // 便携版的 process.execPath 指向 %TEMP% 里的解包目录，会被清理掉；
+  // 开机启动必须挂到便携 exe 本身。
+  if (PORTABLE_EXE) {
+    app.setLoginItemSettings({ ...opts, path: PORTABLE_EXE, args: [] });
+  } else if (app.isPackaged) {
     app.setLoginItemSettings({ ...opts, path: process.execPath, args: [] });
   } else {
     app.setLoginItemSettings({ ...opts, path: process.execPath, args: [HERE] });

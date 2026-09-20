@@ -9,8 +9,12 @@
     "start": "electron .",
     "dev": "electron .",
     "start:annoy": "node scripts/set-flavor.mjs annoy && electron . && node scripts/set-flavor.mjs breed",
-    "dist": "node scripts/set-flavor.mjs breed && electron-builder --win -c.productName=果蝇乐园 -c.appId=com.desktopfly.pet",
-    "dist:annoy": "node scripts/set-flavor.mjs annoy && electron-builder --win -c.productName=果蝇乐园造福版 -c.appId=com.desktopfly.welfare && node scripts/set-flavor.mjs breed"
+    "dist": "node scripts/build.mjs",
+    "dist:annoy": "node scripts/build.mjs --flavor annoy",
+    "dist:all": "node scripts/build.mjs --flavor breed,annoy",
+    "dist:portable": "node scripts/build.mjs --targets portable",
+    "dist:portable:annoy": "node scripts/build.mjs --flavor annoy --targets portable",
+    "dist:nsis": "node scripts/build.mjs --targets nsis"
   },
   "license": "MIT",
   "author": "desktop-fly-pet",
@@ -44,6 +48,10 @@
         {
           "target": "nsis",
           "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
         }
       ]
     },
@@ -53,7 +61,13 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "果蝇乐园",
-      "include": "build/installer.nsh"
+      "include": "build/installer.nsh",
+      "artifactName": "fly-paradise-setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "fly-paradise-portable-${version}.${ext}",
+      "requestExecutionLevel": "user",
+      "unpackDirName": "fly-paradise-portable"
     }
   }
 }
