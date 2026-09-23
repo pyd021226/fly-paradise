@@ -4,3 +4,7 @@ release/
 *.log
 .DS_Store
 .claude/
+
+# 本机启动入口（指向本地 electron.exe / node_modules，不入库）
+*.lnk
+launch-*.cmd
