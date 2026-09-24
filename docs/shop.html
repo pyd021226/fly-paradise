@@ -23,7 +23,7 @@
   .cats button { padding: 6px 12px; font-size: 13px; }
   .cats button.on { background: #2a241c; color: #fff; border-color: transparent; }
   .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-  .card { border: 1px solid var(--line); background: var(--btn); border-radius: 10px; padding: 10px; min-width: 0; }
+  .card canvas { display: block; width: 100%; height: 72px; margin: 0 0 8px; background: #fff; border-radius: 8px; }
   .card .note { font-weight: 600; margin: 0 0 4px; word-break: break-word; }
   .card .who { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
   .card .row { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -135,13 +135,63 @@
     return s;
   }
 
+  function drawThumb(cv, kind, color, qty) {
+    const ctx = cv.getContext("2d");
+    const w = cv.width, h = cv.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#faf8f3";
+    ctx.fillRect(0, 0, w, h);
+    const pal = { wild: "#d4a056", mid: "#aa743c", deep: "#4a2c12", white: "#efe8dc", green: "#1aa85a", red: "#c0392b" };
+    const body = pal[color] || pal.wild;
+    const n = Math.max(1, Math.min(3, qty || 1));
+    for (let i = 0; i < n; i++) {
+      const x = w / 2 + (i - (n - 1) / 2) * 28;
+      const y = h / 2 + 4;
+      ctx.save();
+      ctx.translate(x, y);
+      if (kind === "egg") {
+        ctx.fillStyle = "#f4f1e8";
+        ctx.strokeStyle = "rgba(180,170,150,0.8)";
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.ellipse(0, 0, 10, 5, 0.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      } else if (kind === "larva") {
+        ctx.fillStyle = "#d9cbb0";
+        ctx.beginPath(); ctx.ellipse(0, 0, 14, 4.5, 0.2, 0, Math.PI * 2); ctx.fill();
+      } else if (kind === "pupa") {
+        ctx.fillStyle = "#caa060";
+        ctx.beginPath(); ctx.ellipse(0, 0, 12, 6, 0.3, 0, Math.PI * 2); ctx.fill();
+      } else if (kind === "item") {
+        ctx.fillStyle = "#6b9ac4";
+        ctx.fillRect(-8, -10, 16, 20);
+        ctx.fillStyle = "#eee";
+        ctx.fillRect(-5, -7, 10, 8);
+      } else {
+        ctx.fillStyle = body;
+        ctx.beginPath(); ctx.ellipse(0, 5, 5, 7, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(0, 0, 6, 5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#c48a48";
+        ctx.beginPath(); ctx.ellipse(0, -5, 3.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#d44532";
+        ctx.beginPath(); ctx.ellipse(-2.5, -5.2, 2, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(2.5, -5.2, 2, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
   function listingCard(l, withBid) {
     const card = document.createElement("div");
     card.className = "card";
-    card.innerHTML = "<div class='note'></div><div class='who'></div><div class='row'></div>";
-    card.querySelector(".note").textContent = l.note || kindLabel(l.kind);
-    card.querySelector(".who").textContent = kindLabel(l.kind) + " · " + (l.seller_email || "").split("@")[0] + " · ×" + (l.quantity || 1);
-    const row = card.querySelector(".row");
+    const cv = document.createElement("canvas");
+    cv.width = 160; cv.height = 72;
+    drawThumb(cv, l.kind, l.color, l.quantity || 1);
+    card.appendChild(cv);
+    const note = document.createElement("div"); note.className = "note";
+    note.textContent = l.note || kindLabel(l.kind);
+    const who = document.createElement("div"); who.className = "who";
+    who.textContent = kindLabel(l.kind) + " · " + (l.seller_email || "").split("@")[0] + " · ×" + (l.quantity || 1);
+    const row = document.createElement("div"); row.className = "row";
+    card.append(note, who, row);
     if (!withBid) {
       const u = document.createElement("button");
       u.className = "off"; u.textContent = "下架";
@@ -182,12 +232,17 @@
     card.className = "card";
     const n = qtyOf(o);
     const title = (o.note && o.note.trim()) ? o.note.trim() : ("用" + kindLabel(o.kind) + " ×" + n);
-    card.innerHTML = "<div class='note'></div><div class='who'></div><div class='row'></div>";
-    card.querySelector(".note").textContent = title;
-    card.querySelector(".who").textContent = asSeller
+    const cv = document.createElement("canvas");
+    cv.width = 160; cv.height = 72;
+    drawThumb(cv, o.kind, o.color, n);
+    card.appendChild(cv);
+    const noteEl = document.createElement("div"); noteEl.className = "note"; noteEl.textContent = title;
+    const who = document.createElement("div"); who.className = "who";
+    who.textContent = asSeller
       ? ((o.buyer_email || "").split("@")[0] + " 报价 · " + kindLabel(o.kind) + " ×" + n + " · 换你的「" + (listed.note || kindLabel(listed.kind) || "商品") + "」")
       : ("换「" + (listed.note || kindLabel(listed.kind) || "商品") + "」· " + kindLabel(o.kind) + " ×" + n);
-    const row = card.querySelector(".row");
+    const row = document.createElement("div"); row.className = "row";
+    card.append(noteEl, who, row);
     if (asSeller) {
       const acc = document.createElement("button");
       acc.className = "off"; acc.textContent = "接受";
