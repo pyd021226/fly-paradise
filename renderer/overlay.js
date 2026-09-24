@@ -1,3 +1,5 @@
+import { colorFromCodon } from '../src/codon-color.mjs';
+
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
@@ -179,7 +181,8 @@ function clutchSexes(n) {
 }
 
 function isGreenMorph(u) {
-  return u && (u.color === 'green' || u.color === 'red' || u.color === 'mut');
+  const c = u && u.codon ? colorFromCodon(u.codon, u.color) : (u && u.color);
+  return c === 'green' || c === 'green2';
 }
 
 function breedingAdults() {
@@ -551,8 +554,9 @@ function genesFor(morph) {
   if (morph === 'deep') g.color = 'deep';
   else if (morph === 'mid') g.color = 'mid';
   else if (morph === 'white') g.color = 'white';
-  else if (morph === 'green') g.color = 'green';
-  else if (morph === 'red') g.color = 'red';
+  else if (morph === 'green' || morph === 'green2') g.color = morph;
+  else if (morph === 'red' || morph === 'red2') g.color = morph;
+  else if (morph === 'yellow' || morph === 'yellow2') g.color = morph;
   return g;
 }
 
@@ -610,6 +614,7 @@ function spawnFly(x, y, opts = {}) {
     color: opts.color || 'wild',
     codon: opts.codon || '',
   };
+  if (f.codon) f.color = colorFromCodon(f.codon, f.color);
   if (perched) {
     const p = clampToGlyph(perched, f.x + rand(-10, 10), f.y + rand(-8, 8));
     f.x = p.x;
@@ -1738,7 +1743,11 @@ async function layEggs(x, y, mom, dad, firstOf, clone) {
     if (!clone && mom && dad && mom.serverId && dad.serverId && window.fly && window.fly.breed) {
       try {
         const res = await window.fly.breed(mom.serverId, dad.serverId);
-        if (res && res.ok && res.fly) { serverId = res.fly.id; color = res.fly.color || 'wild'; codon = res.fly.codon || ''; }
+        if (res && res.ok && res.fly) {
+          serverId = res.fly.id;
+          codon = res.fly.codon || '';
+          color = codon ? colorFromCodon(codon, res.fly.color || 'wild') : (res.fly.color || 'wild');
+        }
       } catch (e) { /* 网络失败，用本地 fallback */ }
     }
     eggs.push({
@@ -2375,8 +2384,11 @@ function eclose(p, now) {
   f.vx = Math.cos(f.heading) * 320;
   f.vy = Math.sin(f.heading) * 320;
   f.takeoffUntil = now + 700;
-  if (breed && (f.color === 'red' || f.color === 'mut') && f.serverId && window.fly && window.fly.submitMutation) {
-    window.fly.submitMutation(f.serverId);
+  if (breed && f.serverId && window.fly && window.fly.submitMutation) {
+    const shown = f.codon ? colorFromCodon(f.codon, '') : f.color;
+    if (shown && /^(green|red|yellow)/.test(shown)) {
+      window.fly.submitMutation(f.serverId);
+    }
   }
   noteFirstEclose(p.firstOf, now);
   return true;
@@ -2853,7 +2865,11 @@ const PALETTE = {
   deep: { thorax: '#4a2c12', thoraxDark: '#8a5a28', abdomen: '#6b4524', band: '#1a0e08', head: '#3a220e', leg: '#4a3218' },
   white: { thorax: '#f3eee4', thoraxDark: '#d8d0c4', abdomen: '#fffcf6', band: '#6b6358', head: '#efe8dc', leg: '#c4b8a8' },
   green: { thorax: '#1aa85a', thoraxDark: '#c8f080', abdomen: '#148a48', band: '#0d3a20', head: '#127a40', leg: '#1a5a32' },
+  green2: { thorax: '#3dff88', thoraxDark: '#e8ffb0', abdomen: '#22d466', band: '#0a4a24', head: '#1ee868', leg: '#2ad06a' },
   red: { thorax: '#c0392b', thoraxDark: '#e08060', abdomen: '#96281b', band: '#3d0f08', head: '#8e2018', leg: '#6a201a' },
+  red2: { thorax: '#ff5a4a', thoraxDark: '#ffb090', abdomen: '#e03a28', band: '#4a1008', head: '#ff6a52', leg: '#d04030' },
+  yellow: { thorax: '#e6c84a', thoraxDark: '#f0dc80', abdomen: '#d4b030', band: '#5a4010', head: '#c9a828', leg: '#b89830' },
+  yellow2: { thorax: '#ffe566', thoraxDark: '#fff3b0', abdomen: '#f5d021', band: '#6a5010', head: '#ffe14a', leg: '#e8c838' },
   mut: { thorax: '#c8932a', thoraxDark: '#e0b048', abdomen: '#a3741d', band: '#3d2a08', head: '#8a6420', leg: '#6a4a1a' },
 };
 
@@ -2863,12 +2879,16 @@ const PALETTE_DEAD = {
   deep: { thorax: '#2a180c', thoraxDark: '#140c06', abdomen: '#4a3020', band: '#100804', head: '#241408', leg: '#2a1c10' },
   white: { thorax: '#b8b0a4', thoraxDark: '#7a7468', abdomen: '#d4ccc0', band: '#4a443c', head: '#a0988c', leg: '#8a8278' },
   green: { thorax: '#2a5a38', thoraxDark: '#143820', abdomen: '#3a6a44', band: '#0c2014', head: '#1e4028', leg: '#244830' },
+  green2: { thorax: '#3a7a48', thoraxDark: '#1a4828', abdomen: '#4a8a54', band: '#0c2014', head: '#2e6038', leg: '#347040' },
   red: { thorax: '#5a2820', thoraxDark: '#3a1410', abdomen: '#4a221a', band: '#1a0c08', head: '#3e1c16', leg: '#301a14' },
+  red2: { thorax: '#7a3830', thoraxDark: '#4a1814', abdomen: '#6a2a22', band: '#1a0c08', head: '#5e2820', leg: '#402018' },
+  yellow: { thorax: '#8a7030', thoraxDark: '#5a4818', abdomen: '#7a6428', band: '#2a2008', head: '#6a5420', leg: '#5a4820' },
+  yellow2: { thorax: '#a88838', thoraxDark: '#6a5420', abdomen: '#987830', band: '#2a2008', head: '#8a7028', leg: '#6a5420' },
   mut: { thorax: '#5a4a20', thoraxDark: '#3a2c10', abdomen: '#4a3c1a', band: '#1a1408', head: '#3e3416', leg: '#302814' },
 };
 
 function applyBody(src, male, dead, now) {
-  const morph = src.color || 'wild';
+  const morph = src.codon ? colorFromCodon(src.codon, src.color || 'wild') : (src.color || 'wild');
   const p = (dead ? PALETTE_DEAD : PALETTE)[morph] || PALETTE.wild;
   COL.thorax = p.thorax;
   COL.thoraxDark = p.thoraxDark;
@@ -3575,7 +3595,7 @@ function drawFanfare(now) {
 
 function checkClear() {
   if (!breed || cleared) return;
-  if (flies.some((f) => f.color === 'green')) {
+  if (flies.some((f) => isGreenMorph(f))) {
     cleared = true;
     if (window.fly && window.fly.submitRecord) window.fly.submitRecord(Math.round(breedMs));
   }
@@ -3597,13 +3617,17 @@ function publishLife() {
     deep: { n: 0, f: 0, m: 0 },
     white: { n: 0, f: 0, m: 0 },
     green: { n: 0, f: 0, m: 0 },
+    green2: { n: 0, f: 0, m: 0 },
     red: { n: 0, f: 0, m: 0 },
+    red2: { n: 0, f: 0, m: 0 },
+    yellow: { n: 0, f: 0, m: 0 },
+    yellow2: { n: 0, f: 0, m: 0 },
     mut: { n: 0, f: 0, m: 0 },
   };
   let adultF = 0;
   let adultM = 0;
   for (const f of flies) {
-    const key = f.color || 'wild';
+    const key = f.codon ? colorFromCodon(f.codon, f.color || 'wild') : (f.color || 'wild');
     const slot = morphs[key] || morphs.wild;
     slot.n += 1;
     if (f.sex === 'f') {
@@ -3624,7 +3648,11 @@ function publishLife() {
     adultF,
     adultM,
     green: morphs.green.n,
+    green2: morphs.green2.n,
     red: morphs.red.n,
+    red2: morphs.red2.n,
+    yellow: morphs.yellow.n,
+    yellow2: morphs.yellow2.n,
     mut: morphs.mut.n,
     wild: morphs.wild.n,
     mid: morphs.mid.n,
@@ -3635,7 +3663,11 @@ function publishLife() {
     deepF: morphs.deep.f, deepM: morphs.deep.m,
     whiteF: morphs.white.f, whiteM: morphs.white.m,
     greenF: morphs.green.f, greenM: morphs.green.m,
+    green2F: morphs.green2.f, green2M: morphs.green2.m,
     redF: morphs.red.f, redM: morphs.red.m,
+    red2F: morphs.red2.f, red2M: morphs.red2.m,
+    yellowF: morphs.yellow.f, yellowM: morphs.yellow.m,
+    yellow2F: morphs.yellow2.f, yellow2M: morphs.yellow2.m,
     mutF: morphs.mut.f, mutM: morphs.mut.m,
     breed,
     cleared,

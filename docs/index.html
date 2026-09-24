@@ -78,13 +78,12 @@
 
 <div class="wrap">
   <header><h1>密码子进化树</h1></header>
-  <p class="sub">从 <b>11</b> 开始，点 ▸ 逐层展开，每代接 1 / 2 / 3 / 4。前 4 位凑成 <b>1124</b> 才是绿，之后接 4 续、接 1/2/3 隐、隐后再接 4 升级。每个链后面的输入框可打字备注颜色，备注存你本机浏览器。</p>
+  <p class="sub">从 <b>11</b> 开始，点 ▸ 逐层展开。 <b>1124</b> 绿门、<b>1123</b> 红门、<b>1122</b> 黄门。第 5 位等于第 4 位才显，不等则隐；第 6 位无论是什么都显，若再等于第 4 位则亮一档。第 7 位起暂不解释。</p>
   <div class="legend">
-    <span class="chip"><span class="dot" style="background:var(--green)"></span>绿（Lv.1）</span>
-    <span class="chip"><span class="dot" style="background:var(--red)"></span>红（Lv.2）</span>
-    <span class="chip"><span class="dot" style="background:var(--amber)"></span>Lv.3+</span>
-    <span class="chip"><span class="dot" style="background:var(--hidden)"></span>隐（有绿基因，暂时不显）</span>
-    <span class="chip">无徽章 = 普通</span>
+    <span class="chip"><span class="dot" style="background:var(--green)"></span>绿（1124）</span>
+    <span class="chip"><span class="dot" style="background:var(--red)"></span>红（1123）</span>
+    <span class="chip"><span class="dot" style="background:var(--amber)"></span>黄（1122）</span>
+    <span class="chip"><span class="dot" style="background:var(--hidden)"></span>隐 / 待激活</span>
   </div>
 
   <div class="toolbar">
@@ -110,17 +109,18 @@
   }
 
   function nodeState(chain){
-    if (chain.length < 4 || chain.slice(0,4) !== '1124') return { badge:false };
-    let level = 1, on = true;
-    for (let k = 4; k < chain.length; k++){
-      const d = chain[k];
-      if (on){ if (d !== '4') on = false; }
-      else { if (d === '4') level++; on = true; }
+    if (chain.length < 4) return { badge:false };
+    const prefix = chain.slice(0, 4);
+    const fam = { '1124': { name:'绿', cls:'l1' }, '1123': { name:'红', cls:'l2' }, '1122': { name:'黄', cls:'l3' } }[prefix];
+    if (!fam) return { badge:false };
+    if (chain.length === 4) return { badge:true, cls:'hidden', label: fam.name + '·待' };
+    const d4 = prefix[3];
+    if (chain.length === 5) {
+      if (chain[4] === d4) return { badge:true, cls:fam.cls, label: fam.name };
+      return { badge:true, cls:'hidden', label: '隐' };
     }
-    if (!on) return { badge:true, cls:'hidden', label: level === 1 ? '隐' : '隐·Lv' + level };
-    if (level === 1) return { badge:true, cls:'l1', label:'绿' };
-    if (level === 2) return { badge:true, cls:'l2', label:'红' };
-    return { badge:true, cls:'l3', label:'Lv.' + level };
+    const bright = chain[5] === d4;
+    return { badge:true, cls:fam.cls, label: bright ? fam.name + '·亮' : fam.name };
   }
   function children(node){
     return ['1','2','3','4'].map(d => ({ chain: node.chain + d }));
@@ -141,7 +141,7 @@
       const st = nodeState(chain);
       const canOpen = depth < MAX_DEPTH;
       const isOpen = expanded.has(chain);
-      const lit = chain.slice(0,4) === '1124';
+      const lit = /^(1124|1123|1122)/.test(chain);
 
       const row = document.createElement('div');
       row.className = 'node';

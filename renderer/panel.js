@@ -169,7 +169,11 @@ if (api.onLife) {
     line += `<span class="m">深褐 ${sexn(last.deepF, last.deepM)}</span>`;
     line += `<span class="m">白色 ${sexn(last.whiteF, last.whiteM)}</span>`;
     if (last.green) line += `<span class="m">绿色 ${sexn(last.greenF, last.greenM)}</span>`;
+    if (last.green2) line += `<span class="m">亮绿 ${sexn(last.green2F, last.green2M)}</span>`;
     if (last.red) line += `<span class="m">红色 ${sexn(last.redF, last.redM)}</span>`;
+    if (last.red2) line += `<span class="m">亮红 ${sexn(last.red2F, last.red2M)}</span>`;
+    if (last.yellow) line += `<span class="m">黄色 ${sexn(last.yellowF, last.yellowM)}</span>`;
+    if (last.yellow2) line += `<span class="m">亮黄 ${sexn(last.yellow2F, last.yellow2M)}</span>`;
     if (last.mut) line += `<span class="m">更高突变 ${sexn(last.mutF, last.mutM)}</span>`;
     if (isAnnoy) line += `<span class="m">绿峰值 ${last.greenPeak || 0}</span>`;
     if (last.breed) {
@@ -195,7 +199,11 @@ const JAR_PAL = {
   deep: { thorax: '#4a2c12', thoraxDark: '#8a5a28', abdomen: '#6b4524', band: '#1a0e08', head: '#3a220e', leg: '#4a3218' },
   white: { thorax: '#f3eee4', thoraxDark: '#d8d0c4', abdomen: '#fffcf6', band: '#6b6358', head: '#efe8dc', leg: '#c4b8a8' },
   green: { thorax: '#1aa85a', thoraxDark: '#c8f080', abdomen: '#148a48', band: '#0d3a20', head: '#127a40', leg: '#1a5a32' },
+  green2: { thorax: '#3dff88', thoraxDark: '#e8ffb0', abdomen: '#22d466', band: '#0a4a24', head: '#1ee868', leg: '#2ad06a' },
   red: { thorax: '#c0392b', thoraxDark: '#e08060', abdomen: '#96281b', band: '#3d0f08', head: '#8e2018', leg: '#6a201a' },
+  red2: { thorax: '#ff5a4a', thoraxDark: '#ffb090', abdomen: '#e03a28', band: '#4a1008', head: '#ff6a52', leg: '#d04030' },
+  yellow: { thorax: '#e6c84a', thoraxDark: '#f0dc80', abdomen: '#d4b030', band: '#5a4010', head: '#c9a828', leg: '#b89830' },
+  yellow2: { thorax: '#ffe566', thoraxDark: '#fff3b0', abdomen: '#f5d021', band: '#6a5010', head: '#ffe14a', leg: '#e8c838' },
   mut: { thorax: '#c8932a', thoraxDark: '#e0b048', abdomen: '#a3741d', band: '#3d2a08', head: '#8a6420', leg: '#6a4a1a' },
 };
 
