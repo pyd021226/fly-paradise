@@ -23,7 +23,7 @@
   .cats button { padding: 6px 12px; font-size: 13px; }
   .cats button.on { background: #2a241c; color: #fff; border-color: transparent; }
   .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-  .card canvas { display: block; width: 100%; height: 72px; margin: 0 0 8px; background: #fff; border-radius: 8px; }
+  .card canvas { display: block; width: 100%; height: auto; aspect-ratio: 160 / 72; margin: 0 0 8px; background: #fff; border-radius: 8px; object-fit: contain; }
   .card .note { font-weight: 600; margin: 0 0 4px; word-break: break-word; }
   .card .who { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
   .card .row { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -31,6 +31,10 @@
   .fly { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
   .pane { display: none; }
   .pane.on { display: block; }
+  #cover { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 20; align-items: center; justify-content: center; padding: 16px; }
+  #cover.on { display: flex; }
+  .sheet { background: var(--paper); width: min(420px, 100%); max-height: 80vh; overflow: auto; border-radius: 12px; padding: 16px; }
+  .sheet h2 { font-size: 17px; margin: 0 0 10px; }
   @media (max-width: 520px) { .grid { grid-template-columns: 1fr 1fr; } }
 </style>
 <div class="wrap">
@@ -63,6 +67,13 @@
       <p class="sub" style="margin-top:20px">勾选要拿去换的，可写备注，再点卡片上的「用勾选报价」。</p>
       <input id="bidNote" type="text" placeholder="报价备注（对方能看见）" maxlength="40">
       <div id="flies"></div>
+    </div>
+  </div>
+  <div id="cover">
+    <div class="sheet">
+      <h2 id="coverTitle">我的报价</h2>
+      <div class="grid" id="coverList"></div>
+      <button type="button" id="coverClose" style="width:100%;margin-top:12px">关闭</button>
     </div>
   </div>
 </div>
@@ -203,24 +214,31 @@
       };
       row.appendChild(u);
     } else {
+      const mineBids = allOffers.filter((o) => o.status === "pending" && o.listing_id === l.id && (o.buyer_email === email || o.buyer_id === uid));
       const bid = document.createElement("button");
-      bid.className = "off"; bid.textContent = "用勾选报价";
-      bid.onclick = async () => {
-        const ids = [...document.querySelectorAll("#flies input:checked")].map((x) => x.value);
-        if (!ids.length) { tip("先在下方勾选要拿去换的果蝇"); return; }
-        try {
-          await req("/rest/v1/offers", {
-            method: "POST",
-            headers: headers({ Prefer: "return=minimal" }),
-            body: JSON.stringify({
-              listing_id: l.id, buyer_id: uid, buyer_email: email,
-              kind: "fly", fly_id: ids[0], fly_ids: ids.slice(0, 3), quantity: Math.min(3, ids.length),
-              color: "wild", note: (document.getElementById("bidNote").value || "").trim(), status: "pending",
-            }),
-          });
-          tip("已报价"); await refresh();
-        } catch (e) { tip("报价失败：" + e.message); }
-      };
+      bid.className = "off";
+      if (mineBids.length) {
+        bid.textContent = "报价中";
+        bid.onclick = (e) => { e.preventDefault(); openCover(l, mineBids); };
+      } else {
+        bid.textContent = "用勾选报价";
+        bid.onclick = async () => {
+          const ids = [...document.querySelectorAll("#flies input:checked")].map((x) => x.value);
+          if (!ids.length) { tip("先在下方勾选要拿去换的果蝇"); return; }
+          try {
+            await req("/rest/v1/offers", {
+              method: "POST",
+              headers: headers({ Prefer: "return=minimal" }),
+              body: JSON.stringify({
+                listing_id: l.id, buyer_id: uid, buyer_email: email,
+                kind: "fly", fly_id: ids[0], fly_ids: ids.slice(0, 3), quantity: Math.min(3, ids.length),
+                color: "wild", note: (document.getElementById("bidNote").value || "").trim(), status: "pending",
+              }),
+            });
+            tip("已报价"); await refresh();
+          } catch (e) { tip("报价失败：" + e.message); }
+        };
+      }
       row.appendChild(bid);
     }
     return card;
@@ -267,7 +285,9 @@
       w.onclick = async () => {
         try {
           await req("/rest/v1/offers?id=eq." + o.id, { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify({ status: "rejected" }) });
-          tip("已撤回"); await refresh();
+          tip("已撤回");
+          document.getElementById("cover").classList.remove("on");
+          await refresh();
         } catch (e) { tip("撤回失败：" + e.message); }
       };
       row.appendChild(w);
@@ -295,6 +315,15 @@
     else mall.forEach((l) => ga.appendChild(listingCard(l, true)));
   }
 
+  function openCover(listing, bids) {
+    document.getElementById("coverTitle").textContent = "报价中 · " + (listing.note || kindLabel(listing.kind));
+    const box = document.getElementById("coverList");
+    box.innerHTML = "";
+    if (!bids.length) box.innerHTML = "<p class='sub'>没有报价</p>";
+    else bids.forEach((o) => box.appendChild(offerCard(o, false)));
+    document.getElementById("cover").classList.add("on");
+  }
+
   function setTab(which) {
     const mine = which === "mine";
     document.getElementById("tabMine").classList.toggle("on", mine);
@@ -311,44 +340,22 @@
     } catch (e) { offers = []; }
     allOffers = offers || [];
     render();
-    const busy = busyFlyIds();
-    const offerByFly = {};
-    for (const o of allOffers) {
-      if (o.status !== "pending") continue;
-      if (o.buyer_email !== email && o.buyer_id !== uid) continue;
-      const ids = (Array.isArray(o.fly_ids) && o.fly_ids.length) ? o.fly_ids : (o.fly_id ? [o.fly_id] : []);
-      ids.forEach((id) => { offerByFly[id] = o; });
-    }
     try {
       const flies = await req("/rest/v1/flies?select=id,color,level&limit=40");
       const box = document.getElementById("flies");
       box.innerHTML = "";
-      for (const f of flies || []) {
-        const o = offerByFly[f.id];
-        const row = document.createElement("div");
+      const busy = busyFlyIds();
+      const free = (flies || []).filter((f) => !busy.has(f.id));
+      for (const f of free) {
+        const row = document.createElement("label");
         row.className = "fly";
-        if (o) {
-          row.innerHTML = "<span></span>";
-          row.querySelector("span").textContent = (f.color || "wild") + " · " + f.id.slice(0, 8) + " · 报价中";
-          const w = document.createElement("button");
-          w.className = "off";
-          w.type = "button";
-          w.textContent = "撤回报价";
-          w.onclick = async () => {
-            try {
-              await req("/rest/v1/offers?id=eq." + o.id, { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify({ status: "rejected" }) });
-              tip("已撤回"); await refresh();
-            } catch (e) { tip("撤回失败：" + e.message); }
-          };
-          row.appendChild(w);
-        } else {
-          row.innerHTML = "<label style='display:flex;align-items:center;gap:8px;flex:1'><input type='checkbox'><span></span></label>";
-          row.querySelector("input").value = f.id;
-          row.querySelector("span").textContent = (f.color || "wild") + " · " + f.id.slice(0, 8);
-        }
+        row.innerHTML = "<input type='checkbox'><span></span>";
+        row.querySelector("input").value = f.id;
+        row.querySelector("span").textContent = (f.color || "wild") + " · " + f.id.slice(0, 8);
         box.appendChild(row);
       }
       if (!flies.length) box.textContent = "服务器上还没有你的果蝇。先在游戏里养。";
+      else if (!free.length) box.textContent = "可用的都在报价中。点商品上的「报价中」可撤回。";
     } catch (e) {
       document.getElementById("flies").textContent = "读不到果蝇：" + e.message;
     }
@@ -391,6 +398,10 @@
   document.getElementById("q").addEventListener("input", () => { q = document.getElementById("q").value; render(); });
   document.getElementById("tabMine").onclick = () => setTab("mine");
   document.getElementById("tabMall").onclick = () => setTab("mall");
+  document.getElementById("coverClose").onclick = () => document.getElementById("cover").classList.remove("on");
+  document.getElementById("cover").addEventListener("click", (e) => {
+    if (e.target.id === "cover") document.getElementById("cover").classList.remove("on");
+  });
   document.getElementById("logout").onclick = () => {
     token = ""; email = ""; uid = "";
     try { localStorage.removeItem(KEY); } catch (e) {}
