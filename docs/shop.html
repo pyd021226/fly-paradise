@@ -119,14 +119,29 @@
     document.getElementById("password").value = "";
     tip(msg || "登录已过期，请重新登录");
   }
-  function jwtExp() {
-    if (!token) return 0;
+  function jwtPayload() {
+    if (!token) return null;
     try {
       const b64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
       const pad = b64 + "===".slice((b64.length + 3) % 4);
-      const p = JSON.parse(atob(pad));
-      return Number(p.exp) || 0;
-    } catch (e) { return 0; }
+      return JSON.parse(atob(pad));
+    } catch (e) { return null; }
+  }
+  function jwtExp() {
+    const p = jwtPayload();
+    return p ? (Number(p.exp) || 0) : 0;
+  }
+  function syncMe() {
+    const p = jwtPayload();
+    if (p && p.sub) uid = p.sub;
+    if (p && p.email) email = p.email;
+  }
+  function isMine(l) {
+    syncMe();
+    const sid = String(l.seller_id || "");
+    const sem = String(l.seller_email || "").toLowerCase();
+    const me = String(email || "").toLowerCase();
+    return (sid && uid && sid === String(uid)) || (sem && me && sem === me);
   }
   async function refreshAccess() {
     if (!refreshTok) return false;
@@ -190,7 +205,6 @@
     if (!got.r.ok) throw new Error(got.body.message || got.body.error || got.body.error_description || ("HTTP " + got.r.status));
     return got.body;
   }
-  function isMine(l) { return l.seller_id === uid || l.seller_email === email; }
   function kindLabel(k) { return kindName[k] || k || ""; }
   function matchCat(l) {
     if (cat === "all") return true;
@@ -407,6 +421,7 @@
   }
 
   async function refresh() {
+    syncMe();
     listings = await req("/rest/v1/listings?status=eq.open&select=id,seller_id,seller_email,kind,color,note,quantity,fly_id,fly_ids&order=created_at.desc&limit=80");
     let offers = [];
     try {

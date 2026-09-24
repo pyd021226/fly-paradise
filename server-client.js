@@ -32,14 +32,20 @@ function saveSession() {
   } catch { /* ignore */ }
 }
 
-function jwtExp() {
-  if (!accessToken) return 0;
+function decodeJwt(token) {
+  if (!token) return null;
   try {
-    const p = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
-    return Number(p.exp) || 0;
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b64 + '==='.slice((b64.length + 3) % 4);
+    return JSON.parse(Buffer.from(pad, 'base64').toString('utf8'));
   } catch {
-    return 0;
+    return null;
   }
+}
+
+function jwtExp() {
+  const p = decodeJwt(accessToken);
+  return p ? (Number(p.exp) || 0) : 0;
 }
 
 async function ensureToken() {
@@ -178,13 +184,9 @@ export async function addPoint(n) {
 }
 
 function tokenUser() {
-  if (!accessToken) return null;
-  try {
-    const p = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
-    return { id: p.sub, email: p.email || '' };
-  } catch {
-    return null;
-  }
+  const p = decodeJwt(accessToken);
+  if (!p || !p.sub) return null;
+  return { id: p.sub, email: p.email || sessionEmail || '' };
 }
 
 function authHeaders(extra) {
