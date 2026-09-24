@@ -142,6 +142,10 @@ $('codon').onclick = () => {
   api.send('codon');
 };
 $('fast').onclick = () => api.send('fast');
+$('logout').onclick = async () => {
+  if (api.signOut) await api.signOut();
+  showLogin();
+};
 $('quit').onclick = () => api.send('quit');
 
 addEventListener('keydown', (e) => {
