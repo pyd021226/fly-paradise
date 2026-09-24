@@ -49,14 +49,19 @@
       <button type="button" id="logout" style="margin-left:auto">退出登录</button>
     </div>
     <div id="paneMine" class="pane on">
-      <p class="sub">自己上架的东西，可下架，也可处理别人的报价。</p>
+      <p class="sub">收到的报价（一张卡一个报价，含备注和数量）</p>
+      <div class="grid" id="gridInbox"></div>
+      <p class="sub" style="margin-top:20px">我上架的</p>
       <div class="grid" id="gridMine"></div>
+      <p class="sub" style="margin-top:20px">我出的报价（可撤回）</p>
+      <div class="grid" id="gridBids"></div>
     </div>
     <div id="paneMall" class="pane">
       <div class="cats" id="cats"></div>
       <input id="q" type="search" placeholder="搜索备注、卖家、种类">
       <div class="grid" id="gridMall"></div>
-      <p class="sub" style="margin-top:20px">勾选要拿去换的，再点卡片上的「用勾选报价」。</p>
+      <p class="sub" style="margin-top:20px">勾选要拿去换的，可写备注，再点卡片上的「用勾选报价」。</p>
+      <input id="bidNote" type="text" placeholder="报价备注（对方能看见）" maxlength="40">
       <div id="flies"></div>
     </div>
   </div>
@@ -75,7 +80,7 @@
     { id: "item", label: "道具", kinds: ["item"] },
   ];
   let token = "", email = "", uid = "", tipTimer = 0;
-  let listings = [], offersBy = {}, cat = "all", q = "";
+  let listings = [], allOffers = [], cat = "all", q = "";
 
   function tip(t) {
     const el = document.getElementById("tip");
@@ -114,15 +119,30 @@
     return blob.indexOf(s) >= 0;
   }
 
-  function cardEl(l, mineTab) {
-    const mine = isMine(l);
+  function qtyOf(o) {
+    if (Number(o.quantity) > 0) return Number(o.quantity);
+    if (Array.isArray(o.fly_ids) && o.fly_ids.length) return o.fly_ids.length;
+    return 1;
+  }
+  function busyFlyIds() {
+    const s = new Set();
+    for (const o of allOffers) {
+      if (o.status !== "pending") continue;
+      if (o.buyer_email !== email && o.buyer_id !== uid) continue;
+      const ids = (Array.isArray(o.fly_ids) && o.fly_ids.length) ? o.fly_ids : (o.fly_id ? [o.fly_id] : []);
+      ids.forEach((id) => s.add(id));
+    }
+    return s;
+  }
+
+  function listingCard(l, withBid) {
     const card = document.createElement("div");
     card.className = "card";
     card.innerHTML = "<div class='note'></div><div class='who'></div><div class='row'></div>";
     card.querySelector(".note").textContent = l.note || kindLabel(l.kind);
-    card.querySelector(".who").textContent = kindLabel(l.kind) + " · " + (l.seller_email || "").split("@")[0];
+    card.querySelector(".who").textContent = kindLabel(l.kind) + " · " + (l.seller_email || "").split("@")[0] + " · ×" + (l.quantity || 1);
     const row = card.querySelector(".row");
-    if (mineTab && mine) {
+    if (!withBid) {
       const u = document.createElement("button");
       u.className = "off"; u.textContent = "下架";
       u.onclick = async () => {
@@ -132,31 +152,7 @@
         } catch (e) { tip("下架失败：" + e.message); }
       };
       row.appendChild(u);
-      for (const o of offersBy[l.id] || []) {
-        const p = document.createElement("div");
-        p.className = "who";
-        p.textContent = (o.buyer_email || "").split("@")[0] + " 用" + kindLabel(o.kind) + (o.note ? "·" + o.note : "") + "换";
-        card.appendChild(p);
-        const acc = document.createElement("button");
-        acc.className = "off"; acc.textContent = "接受";
-        acc.onclick = async () => {
-          try {
-            await req("/rest/v1/rpc/accept_offer", { method: "POST", body: JSON.stringify({ p_offer_id: o.id }) });
-            tip("已交换"); await refresh();
-          } catch (e) { tip("接受失败：" + e.message); }
-        };
-        const rej = document.createElement("button");
-        rej.className = "off"; rej.textContent = "拒绝";
-        rej.onclick = async () => {
-          try {
-            await req("/rest/v1/offers?id=eq." + o.id, { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify({ status: "rejected" }) });
-            tip("已拒绝"); await refresh();
-          } catch (e) { tip("拒绝失败：" + e.message); }
-        };
-        row.appendChild(acc); row.appendChild(rej);
-      }
-    }
-    if (!mineTab) {
+    } else {
       const bid = document.createElement("button");
       bid.className = "off"; bid.textContent = "用勾选报价";
       bid.onclick = async () => {
@@ -169,7 +165,7 @@
             body: JSON.stringify({
               listing_id: l.id, buyer_id: uid, buyer_email: email,
               kind: "fly", fly_id: ids[0], fly_ids: ids.slice(0, 3), quantity: Math.min(3, ids.length),
-              color: "wild", note: "", status: "pending",
+              color: "wild", note: (document.getElementById("bidNote").value || "").trim(), status: "pending",
             }),
           });
           tip("已报价"); await refresh();
@@ -180,17 +176,68 @@
     return card;
   }
 
+  function offerCard(o, asSeller) {
+    const listed = o.listings || {};
+    const card = document.createElement("div");
+    card.className = "card";
+    const n = qtyOf(o);
+    const title = (o.note && o.note.trim()) ? o.note.trim() : ("用" + kindLabel(o.kind) + " ×" + n);
+    card.innerHTML = "<div class='note'></div><div class='who'></div><div class='row'></div>";
+    card.querySelector(".note").textContent = title;
+    card.querySelector(".who").textContent = asSeller
+      ? ((o.buyer_email || "").split("@")[0] + " 报价 · " + kindLabel(o.kind) + " ×" + n + " · 换你的「" + (listed.note || kindLabel(listed.kind) || "商品") + "」")
+      : ("换「" + (listed.note || kindLabel(listed.kind) || "商品") + "」· " + kindLabel(o.kind) + " ×" + n);
+    const row = card.querySelector(".row");
+    if (asSeller) {
+      const acc = document.createElement("button");
+      acc.className = "off"; acc.textContent = "接受";
+      acc.onclick = async () => {
+        try {
+          await req("/rest/v1/rpc/accept_offer", { method: "POST", body: JSON.stringify({ p_offer_id: o.id }) });
+          tip("已交换"); await refresh();
+        } catch (e) { tip("接受失败：" + e.message); }
+      };
+      const rej = document.createElement("button");
+      rej.className = "off"; rej.textContent = "拒绝";
+      rej.onclick = async () => {
+        try {
+          await req("/rest/v1/offers?id=eq." + o.id, { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify({ status: "rejected" }) });
+          tip("已拒绝"); await refresh();
+        } catch (e) { tip("拒绝失败：" + e.message); }
+      };
+      row.appendChild(acc); row.appendChild(rej);
+    } else {
+      const w = document.createElement("button");
+      w.className = "off"; w.textContent = "撤回";
+      w.onclick = async () => {
+        try {
+          await req("/rest/v1/offers?id=eq." + o.id, { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify({ status: "rejected" }) });
+          tip("已撤回"); await refresh();
+        } catch (e) { tip("撤回失败：" + e.message); }
+      };
+      row.appendChild(w);
+    }
+    return card;
+  }
+
   function render() {
     const mine = listings.filter(isMine);
     const mall = listings.filter((l) => matchCat(l) && matchQ(l));
+    const inbox = allOffers.filter((o) => o.status === "pending" && mine.some((l) => l.id === o.listing_id));
+    const bids = allOffers.filter((o) => o.status === "pending" && (o.buyer_email === email || o.buyer_id === uid));
+    const gi = document.getElementById("gridInbox");
     const gm = document.getElementById("gridMine");
+    const gb = document.getElementById("gridBids");
     const ga = document.getElementById("gridMall");
-    gm.innerHTML = "";
-    ga.innerHTML = "";
+    gi.innerHTML = ""; gm.innerHTML = ""; gb.innerHTML = ""; ga.innerHTML = "";
+    if (!inbox.length) gi.innerHTML = "<p class='sub'>还没有人向你报价</p>";
+    else inbox.forEach((o) => gi.appendChild(offerCard(o, true)));
     if (!mine.length) gm.innerHTML = "<p class='sub'>还没有自己上架的东西</p>";
-    else mine.forEach((l) => gm.appendChild(cardEl(l, true)));
+    else mine.forEach((l) => gm.appendChild(listingCard(l, false)));
+    if (!bids.length) gb.innerHTML = "<p class='sub'>没有进行中的报价</p>";
+    else bids.forEach((o) => gb.appendChild(offerCard(o, false)));
     if (!mall.length) ga.innerHTML = "<p class='sub'>没有符合条件的商品</p>";
-    else mall.forEach((l) => ga.appendChild(cardEl(l, false)));
+    else mall.forEach((l) => ga.appendChild(listingCard(l, true)));
   }
 
   function setTab(which) {
@@ -205,16 +252,17 @@
     listings = await req("/rest/v1/listings?status=eq.open&select=id,seller_id,seller_email,kind,color,note,quantity,fly_id,fly_ids&order=created_at.desc&limit=80");
     let offers = [];
     try {
-      offers = await req("/rest/v1/offers?select=id,listing_id,buyer_email,kind,color,note,fly_id,fly_ids,status&status=eq.pending&order=created_at.desc&limit=50");
+      offers = await req("/rest/v1/offers?select=id,listing_id,buyer_id,buyer_email,kind,color,note,quantity,fly_id,fly_ids,status,listings(note,kind,seller_email)&status=eq.pending&order=created_at.desc&limit=80");
     } catch (e) { offers = []; }
-    offersBy = {};
-    for (const o of offers || []) (offersBy[o.listing_id] || (offersBy[o.listing_id] = [])).push(o);
+    allOffers = offers || [];
     render();
+    const busy = busyFlyIds();
     try {
       const flies = await req("/rest/v1/flies?select=id,color,level&limit=40");
       const box = document.getElementById("flies");
       box.innerHTML = "";
-      for (const f of flies) {
+      const free = (flies || []).filter((f) => !busy.has(f.id));
+      for (const f of free) {
         const row = document.createElement("label");
         row.className = "fly";
         row.innerHTML = "<input type='checkbox'><span></span>";
@@ -223,6 +271,7 @@
         box.appendChild(row);
       }
       if (!flies.length) box.textContent = "服务器上还没有你的果蝇。先在游戏里养。";
+      else if (!free.length) box.textContent = "可用的果蝇都在报价中。撤回后才会重新出现。";
     } catch (e) {
       document.getElementById("flies").textContent = "读不到果蝇：" + e.message;
     }
