@@ -90,7 +90,7 @@
     { id: "fly", label: "果蝇", kinds: ["fly"] },
     { id: "item", label: "道具", kinds: ["item"] },
   ];
-  let token = "", email = "", uid = "", tipTimer = 0;
+  let token = "", refreshTok = "", email = "", uid = "", tipTimer = 0;
   let listings = [], allOffers = [], cat = "all", q = "";
 
   function tip(t) {
@@ -101,20 +101,94 @@
     const keep = t;
     tipTimer = setTimeout(() => { if (el.textContent === keep) el.textContent = ""; }, 3000);
   }
+  function saveSession() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        access_token: token,
+        refresh_token: refreshTok,
+        email: email,
+        uid: uid,
+      }));
+    } catch (e) {}
+  }
+  function kickLogin(msg) {
+    token = ""; refreshTok = ""; email = ""; uid = "";
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    document.getElementById("app").style.display = "none";
+    document.getElementById("login").style.display = "block";
+    document.getElementById("password").value = "";
+    tip(msg || "登录已过期，请重新登录");
+  }
+  function jwtExp() {
+    if (!token) return 0;
+    try {
+      const b64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+      const pad = b64 + "===".slice((b64.length + 3) % 4);
+      const p = JSON.parse(atob(pad));
+      return Number(p.exp) || 0;
+    } catch (e) { return 0; }
+  }
+  async function refreshAccess() {
+    if (!refreshTok) return false;
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8000);
+      const r = await fetch(URL + "/auth/v1/token?grant_type=refresh_token", {
+        method: "POST",
+        headers: { apikey: ANON, "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshTok }),
+        signal: ctrl.signal,
+      });
+      clearTimeout(t);
+      const data = await r.json().catch(function () { return {}; });
+      if (!r.ok || !data.access_token) return false;
+      token = data.access_token;
+      if (data.refresh_token) refreshTok = data.refresh_token;
+      if (data.user && data.user.email) email = data.user.email;
+      if (data.user && data.user.id) uid = data.user.id;
+      saveSession();
+      return true;
+    } catch (e) { return false; }
+  }
+  async function ensureToken() {
+    if (token && jwtExp() > Date.now() / 1000 + 30) return true;
+    if (!refreshTok) { token = ""; return false; }
+    return refreshAccess();
+  }
   function headers(extra) {
     return Object.assign({ apikey: ANON, Authorization: "Bearer " + token, "Content-Type": "application/json" }, extra || {});
   }
-  async function req(path, opts) {
+  async function doFetch(path, opts) {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 8000);
     try {
       const r = await fetch(URL + path, Object.assign({ headers: headers(), signal: ctrl.signal }, opts || {}));
       const text = await r.text();
       let body = {};
-      try { body = text ? JSON.parse(text) : {}; } catch { body = { raw: text }; }
-      if (!r.ok) throw new Error(body.message || body.error || ("HTTP " + r.status));
-      return body;
+      try { body = text ? JSON.parse(text) : {}; } catch (e) { body = { raw: text }; }
+      return { r: r, body: body };
     } finally { clearTimeout(t); }
+  }
+  async function req(path, opts) {
+    const auth = path.indexOf("/auth/v1/") === 0;
+    if (!auth) {
+      const ok = await ensureToken();
+      if (!ok) {
+        kickLogin("登录已过期，请重新登录");
+        throw new Error("登录已过期，请重新登录");
+      }
+    }
+    let got = await doFetch(path, opts);
+    if (!auth && got.r.status === 401) {
+      const ok = await refreshAccess();
+      if (!ok) {
+        kickLogin("登录已过期，请重新登录");
+        throw new Error("登录已过期，请重新登录");
+      }
+      got = await doFetch(path, opts);
+    }
+    if (!got.r.ok) throw new Error(got.body.message || got.body.error || got.body.error_description || ("HTTP " + got.r.status));
+    return got.body;
   }
   function isMine(l) { return l.seller_id === uid || l.seller_email === email; }
   function kindLabel(k) { return kindName[k] || k || ""; }
@@ -372,9 +446,10 @@
       body: JSON.stringify({ email: em, password: pw }),
     });
     token = body.access_token;
+    refreshTok = body.refresh_token || "";
     email = body.user && body.user.email;
     uid = body.user && body.user.id;
-    try { localStorage.setItem(KEY, JSON.stringify({ access_token: token, email, uid, refresh_token: body.refresh_token })); } catch (e) {}
+    saveSession();
     document.getElementById("login").style.display = "none";
     document.getElementById("app").style.display = "block";
     tip("已登录");
@@ -402,23 +477,22 @@
   document.getElementById("cover").addEventListener("click", (e) => {
     if (e.target.id === "cover") document.getElementById("cover").classList.remove("on");
   });
-  document.getElementById("logout").onclick = () => {
-    token = ""; email = ""; uid = "";
-    try { localStorage.removeItem(KEY); } catch (e) {}
-    document.getElementById("app").style.display = "none";
-    document.getElementById("login").style.display = "block";
-    document.getElementById("password").value = "";
-    tip("已退出");
-  };
+  document.getElementById("logout").onclick = () => kickLogin("已退出");
   document.getElementById("loginBtn").onclick = () => login().catch((e) => tip(e.message));
 
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || "null");
-    if (s && s.access_token) {
-      token = s.access_token; email = s.email; uid = s.uid;
+    if (s && (s.access_token || s.refresh_token)) {
+      token = s.access_token || "";
+      refreshTok = s.refresh_token || "";
+      email = s.email || "";
+      uid = s.uid || "";
       document.getElementById("login").style.display = "none";
       document.getElementById("app").style.display = "block";
-      refresh().catch((e) => tip(e.message));
+      ensureToken().then(function (ok) {
+        if (!ok) { kickLogin("登录已过期，请重新登录"); return; }
+        return refresh();
+      }).catch(function (e) { tip(e.message); });
     }
   } catch (e) {}
 </script>
