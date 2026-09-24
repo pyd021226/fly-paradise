@@ -46,6 +46,7 @@
     <div class="tabs">
       <button type="button" id="tabMine" class="on">我的商品</button>
       <button type="button" id="tabMall">商城</button>
+      <button type="button" id="logout" style="margin-left:auto">退出登录</button>
     </div>
     <div id="paneMine" class="pane on">
       <p class="sub">自己上架的东西，可下架，也可处理别人的报价。</p>
@@ -264,6 +265,14 @@
   document.getElementById("q").addEventListener("input", () => { q = document.getElementById("q").value; render(); });
   document.getElementById("tabMine").onclick = () => setTab("mine");
   document.getElementById("tabMall").onclick = () => setTab("mall");
+  document.getElementById("logout").onclick = () => {
+    token = ""; email = ""; uid = "";
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    document.getElementById("app").style.display = "none";
+    document.getElementById("login").style.display = "block";
+    document.getElementById("password").value = "";
+    tip("已退出");
+  };
   document.getElementById("loginBtn").onclick = () => login().catch((e) => tip(e.message));
 
   try {
