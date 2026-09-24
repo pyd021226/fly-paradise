@@ -7,7 +7,7 @@
   :root { --paper:#f4efe6; --ink:#2a241c; --muted:#7a7166; --line:#ddd4c6; --btn:#fffdf8; --pink:#e23d7a; }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.45 "IBM Plex Sans", "Microsoft YaHei", sans-serif; }
-  .wrap { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
   h1 { font-size: 22px; margin: 0 0 8px; }
   .sub { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
   input, button { font: inherit; }
@@ -16,43 +16,64 @@
   button.primary { background: var(--pink); color: #fff; border-color: transparent; font-weight: 650; width: 100%; }
   button.off { background: #2a241c; color: #fff; border-color: transparent; font-size: 13px; padding: 6px 10px; }
   .tip { color: var(--pink); min-height: 1.3em; font-size: 13px; margin: 0 0 12px; }
+  .tabs { display: flex; gap: 0; margin: 0 0 14px; border-bottom: 1px solid var(--line); }
+  .tabs button { border: 0; border-radius: 10px 10px 0 0; background: transparent; padding: 10px 18px; color: var(--muted); font-weight: 600; }
+  .tabs button.on { background: var(--btn); color: var(--ink); border: 1px solid var(--line); border-bottom-color: var(--btn); margin-bottom: -1px; }
+  .cats { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+  .cats button { padding: 6px 12px; font-size: 13px; }
+  .cats button.on { background: #2a241c; color: #fff; border-color: transparent; }
   .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .card { border: 1px solid var(--line); background: var(--btn); border-radius: 10px; padding: 10px; min-width: 0; }
   .card .note { font-weight: 600; margin: 0 0 4px; word-break: break-word; }
   .card .who { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
   .card .row { display: flex; flex-wrap: wrap; gap: 6px; }
-  .mine { font-size: 12px; color: var(--pink); }
-  #shop, #me { display: none; }
-  #me { margin-top: 28px; }
+  #app { display: none; }
   .fly { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .pane { display: none; }
+  .pane.on { display: block; }
+  @media (max-width: 520px) { .grid { grid-template-columns: 1fr 1fr; } }
 </style>
 <div class="wrap">
   <h1>果蝇商店</h1>
-  <p class="sub">和游戏同一个账号。上架请仍在游戏瓶子里操作；这里看商店、下架、报价、接受交换。</p>
+  <p class="sub">和游戏同一个账号。上架请在游戏瓶子里操作。</p>
   <p class="tip" id="tip"></p>
   <div id="login">
     <input id="email" type="email" placeholder="邮箱">
     <input id="password" type="password" placeholder="密码">
     <button class="primary" id="loginBtn" type="button">登录</button>
   </div>
-  <div id="shop">
-    <div class="grid" id="grid"></div>
-  </div>
-  <div id="me">
-    <h1>我的果蝇（报价用）</h1>
-    <p class="sub">勾选要拿去换的，再点某张卡上的「用勾选报价」。</p>
-    <div id="flies"></div>
+  <div id="app">
+    <div class="tabs">
+      <button type="button" id="tabMine" class="on">我的商品</button>
+      <button type="button" id="tabMall">商城</button>
+    </div>
+    <div id="paneMine" class="pane on">
+      <p class="sub">自己上架的东西，可下架，也可处理别人的报价。</p>
+      <div class="grid" id="gridMine"></div>
+    </div>
+    <div id="paneMall" class="pane">
+      <div class="cats" id="cats"></div>
+      <input id="q" type="search" placeholder="搜索备注、卖家、种类">
+      <div class="grid" id="gridMall"></div>
+      <p class="sub" style="margin-top:20px">勾选要拿去换的，再点卡片上的「用勾选报价」。</p>
+      <div id="flies"></div>
+    </div>
   </div>
 </div>
 <script>
   const URL = "https://asfhegiiqhgaodpmqvlh.supabase.co";
   const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzZmhlZ2lpcWhnYW9kcG1xdmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNDU0MDAsImV4cCI6MjEwNTcyMTQwMH0._iFe4e77vDLX6vreQE8jci7az8_t1_U1sdnspmiALbQ";
   const KEY = "fly-shop-session";
-  const kindName = { fly: "果蝇", egg: "卵", larva: "蛆", pupa: "蛹" };
-  let token = "";
-  let email = "";
-  let uid = "";
-  let tipTimer = 0;
+  const kindName = { fly: "果蝇", egg: "卵", larva: "幼虫", pupa: "幼虫", item: "道具" };
+  const CATS = [
+    { id: "all", label: "全部" },
+    { id: "egg", label: "卵", kinds: ["egg"] },
+    { id: "larva", label: "幼虫", kinds: ["larva", "pupa"] },
+    { id: "fly", label: "果蝇", kinds: ["fly"] },
+    { id: "item", label: "道具", kinds: ["item"] },
+  ];
+  let token = "", email = "", uid = "", tipTimer = 0;
+  let listings = [], offersBy = {}, cat = "all", q = "";
 
   function tip(t) {
     const el = document.getElementById("tip");
@@ -77,96 +98,67 @@
       return body;
     } finally { clearTimeout(t); }
   }
-
-  async function login() {
-    const em = document.getElementById("email").value.trim();
-    const pw = document.getElementById("password").value;
-    if (!em || !pw) { tip("填邮箱和密码"); return; }
-    tip("登录中…");
-    const body = await req("/auth/v1/token?grant_type=password", {
-      method: "POST",
-      headers: { apikey: ANON, "Content-Type": "application/json" },
-      body: JSON.stringify({ email: em, password: pw }),
-    });
-    token = body.access_token;
-    email = body.user && body.user.email;
-    uid = body.user && body.user.id;
-    try { localStorage.setItem(KEY, JSON.stringify({ access_token: token, email, uid, refresh_token: body.refresh_token })); } catch (e) {}
-    document.getElementById("login").style.display = "none";
-    document.getElementById("shop").style.display = "block";
-    document.getElementById("me").style.display = "block";
-    tip("已登录");
-    await refresh();
+  function isMine(l) { return l.seller_id === uid || l.seller_email === email; }
+  function kindLabel(k) { return kindName[k] || k || ""; }
+  function matchCat(l) {
+    if (cat === "all") return true;
+    const c = CATS.find((x) => x.id === cat);
+    return c && c.kinds && c.kinds.indexOf(l.kind) >= 0;
+  }
+  function matchQ(l) {
+    const s = (q || "").trim().toLowerCase();
+    if (!s) return true;
+    const blob = [(l.note || ""), (l.seller_email || ""), kindLabel(l.kind), (l.kind || "")].join(" ").toLowerCase();
+    return blob.indexOf(s) >= 0;
   }
 
-  function selectedFlyIds() {
-    return [...document.querySelectorAll("#flies input:checked")].map((x) => x.value);
-  }
-
-  async function refresh() {
-    const listings = await req("/rest/v1/listings?status=eq.open&select=id,seller_id,seller_email,kind,color,note,quantity,fly_id,fly_ids&order=created_at.desc&limit=50");
-    let offers = [];
-    try {
-      offers = await req("/rest/v1/offers?select=id,listing_id,buyer_email,kind,color,note,fly_id,fly_ids,status&status=eq.pending&order=created_at.desc&limit=50");
-    } catch (e) { offers = []; }
-    const by = {};
-    for (const o of offers || []) (by[o.listing_id] || (by[o.listing_id] = [])).push(o);
-    const grid = document.getElementById("grid");
-    grid.innerHTML = "";
-    if (!listings.length) {
-      grid.innerHTML = "<p class='sub'>暂无上架</p>";
-    }
-    for (const l of listings) {
-      const mine = l.seller_id === uid || l.seller_email === email;
-      const card = document.createElement("div");
-      card.className = "card";
-      card.innerHTML = "<div class='note'></div><div class='who'></div><div class='row'></div>";
-      card.querySelector(".note").textContent = l.note || kindName[l.kind] || l.kind;
-      card.querySelector(".who").textContent = (l.seller_email || "").split("@")[0] + (mine ? " · 我的" : "");
-      const row = card.querySelector(".row");
-      if (mine) {
-        const u = document.createElement("button");
-        u.className = "off";
-        u.textContent = "下架";
-        u.onclick = async () => {
+  function cardEl(l, mineTab) {
+    const mine = isMine(l);
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = "<div class='note'></div><div class='who'></div><div class='row'></div>";
+    card.querySelector(".note").textContent = l.note || kindLabel(l.kind);
+    card.querySelector(".who").textContent = kindLabel(l.kind) + " · " + (l.seller_email || "").split("@")[0];
+    const row = card.querySelector(".row");
+    if (mineTab && mine) {
+      const u = document.createElement("button");
+      u.className = "off"; u.textContent = "下架";
+      u.onclick = async () => {
+        try {
+          await req("/rest/v1/listings?id=eq." + l.id, { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify({ status: "closed" }) });
+          tip("已下架"); await refresh();
+        } catch (e) { tip("下架失败：" + e.message); }
+      };
+      row.appendChild(u);
+      for (const o of offersBy[l.id] || []) {
+        const p = document.createElement("div");
+        p.className = "who";
+        p.textContent = (o.buyer_email || "").split("@")[0] + " 用" + kindLabel(o.kind) + (o.note ? "·" + o.note : "") + "换";
+        card.appendChild(p);
+        const acc = document.createElement("button");
+        acc.className = "off"; acc.textContent = "接受";
+        acc.onclick = async () => {
           try {
-            await req("/rest/v1/listings?id=eq." + l.id, { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify({ status: "closed" }) });
-            tip("已下架");
-            await refresh();
-          } catch (e) { tip("下架失败：" + e.message); }
+            await req("/rest/v1/rpc/accept_offer", { method: "POST", body: JSON.stringify({ p_offer_id: o.id }) });
+            tip("已交换"); await refresh();
+          } catch (e) { tip("接受失败：" + e.message); }
         };
-        row.appendChild(u);
-        for (const o of by[l.id] || []) {
-          const p = document.createElement("div");
-          p.className = "who";
-          p.textContent = (o.buyer_email || "").split("@")[0] + " 用" + (kindName[o.kind] || o.kind) + (o.note ? "·" + o.note : "") + "换";
-          card.appendChild(p);
-          const acc = document.createElement("button");
-          acc.className = "off"; acc.textContent = "接受";
-          acc.onclick = async () => {
-            try {
-              await req("/rest/v1/rpc/accept_offer", { method: "POST", body: JSON.stringify({ p_offer_id: o.id }) });
-              tip("已交换");
-              await refresh();
-            } catch (e) { tip("接受失败：" + e.message); }
-          };
-          const rej = document.createElement("button");
-          rej.className = "off"; rej.textContent = "拒绝";
-          rej.onclick = async () => {
-            try {
-              await req("/rest/v1/offers?id=eq." + o.id, { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify({ status: "rejected" }) });
-              tip("已拒绝");
-              await refresh();
-            } catch (e) { tip("拒绝失败：" + e.message); }
-          };
-          row.appendChild(acc); row.appendChild(rej);
-        }
+        const rej = document.createElement("button");
+        rej.className = "off"; rej.textContent = "拒绝";
+        rej.onclick = async () => {
+          try {
+            await req("/rest/v1/offers?id=eq." + o.id, { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify({ status: "rejected" }) });
+            tip("已拒绝"); await refresh();
+          } catch (e) { tip("拒绝失败：" + e.message); }
+        };
+        row.appendChild(acc); row.appendChild(rej);
       }
+    }
+    if (!mineTab) {
       const bid = document.createElement("button");
-      bid.className = "off";
-      bid.textContent = "用勾选报价";
+      bid.className = "off"; bid.textContent = "用勾选报价";
       bid.onclick = async () => {
-        const ids = selectedFlyIds();
+        const ids = [...document.querySelectorAll("#flies input:checked")].map((x) => x.value);
         if (!ids.length) { tip("先在下方勾选要拿去换的果蝇"); return; }
         try {
           await req("/rest/v1/offers", {
@@ -178,15 +170,46 @@
               color: "wild", note: "", status: "pending",
             }),
           });
-          tip("已报价");
-          await refresh();
+          tip("已报价"); await refresh();
         } catch (e) { tip("报价失败：" + e.message); }
       };
       row.appendChild(bid);
-      grid.appendChild(card);
     }
+    return card;
+  }
+
+  function render() {
+    const mine = listings.filter(isMine);
+    const mall = listings.filter((l) => matchCat(l) && matchQ(l));
+    const gm = document.getElementById("gridMine");
+    const ga = document.getElementById("gridMall");
+    gm.innerHTML = "";
+    ga.innerHTML = "";
+    if (!mine.length) gm.innerHTML = "<p class='sub'>还没有自己上架的东西</p>";
+    else mine.forEach((l) => gm.appendChild(cardEl(l, true)));
+    if (!mall.length) ga.innerHTML = "<p class='sub'>没有符合条件的商品</p>";
+    else mall.forEach((l) => ga.appendChild(cardEl(l, false)));
+  }
+
+  function setTab(which) {
+    const mine = which === "mine";
+    document.getElementById("tabMine").classList.toggle("on", mine);
+    document.getElementById("tabMall").classList.toggle("on", !mine);
+    document.getElementById("paneMine").classList.toggle("on", mine);
+    document.getElementById("paneMall").classList.toggle("on", !mine);
+  }
+
+  async function refresh() {
+    listings = await req("/rest/v1/listings?status=eq.open&select=id,seller_id,seller_email,kind,color,note,quantity,fly_id,fly_ids&order=created_at.desc&limit=80");
+    let offers = [];
     try {
-      const flies = await req("/rest/v1/flies?select=id,color,level&order=created_at.desc&limit=40");
+      offers = await req("/rest/v1/offers?select=id,listing_id,buyer_email,kind,color,note,fly_id,fly_ids,status&status=eq.pending&order=created_at.desc&limit=50");
+    } catch (e) { offers = []; }
+    offersBy = {};
+    for (const o of offers || []) (offersBy[o.listing_id] || (offersBy[o.listing_id] = [])).push(o);
+    render();
+    try {
+      const flies = await req("/rest/v1/flies?select=id,color,level&limit=40");
       const box = document.getElementById("flies");
       box.innerHTML = "";
       for (const f of flies) {
@@ -203,14 +226,51 @@
     }
   }
 
+  async function login() {
+    const em = document.getElementById("email").value.trim();
+    const pw = document.getElementById("password").value;
+    if (!em || !pw) { tip("填邮箱和密码"); return; }
+    tip("登录中…");
+    const body = await req("/auth/v1/token?grant_type=password", {
+      method: "POST",
+      headers: { apikey: ANON, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: em, password: pw }),
+    });
+    token = body.access_token;
+    email = body.user && body.user.email;
+    uid = body.user && body.user.id;
+    try { localStorage.setItem(KEY, JSON.stringify({ access_token: token, email, uid, refresh_token: body.refresh_token })); } catch (e) {}
+    document.getElementById("login").style.display = "none";
+    document.getElementById("app").style.display = "block";
+    tip("已登录");
+    await refresh();
+  }
+
+  const cats = document.getElementById("cats");
+  CATS.forEach((c) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = c.label;
+    if (c.id === "all") b.className = "on";
+    b.onclick = () => {
+      cat = c.id;
+      [...cats.children].forEach((x) => x.classList.remove("on"));
+      b.classList.add("on");
+      render();
+    };
+    cats.appendChild(b);
+  });
+  document.getElementById("q").addEventListener("input", () => { q = document.getElementById("q").value; render(); });
+  document.getElementById("tabMine").onclick = () => setTab("mine");
+  document.getElementById("tabMall").onclick = () => setTab("mall");
   document.getElementById("loginBtn").onclick = () => login().catch((e) => tip(e.message));
+
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || "null");
     if (s && s.access_token) {
       token = s.access_token; email = s.email; uid = s.uid;
       document.getElementById("login").style.display = "none";
-      document.getElementById("shop").style.display = "block";
-      document.getElementById("me").style.display = "block";
+      document.getElementById("app").style.display = "block";
       refresh().catch((e) => tip(e.message));
     }
   } catch (e) {}
