@@ -222,7 +222,7 @@
 
   function render() {
     const mine = listings.filter(isMine);
-    const mall = listings.filter((l) => matchCat(l) && matchQ(l));
+    const mall = listings.filter((l) => !isMine(l) && matchCat(l) && matchQ(l));
     const inbox = allOffers.filter((o) => o.status === "pending" && mine.some((l) => l.id === o.listing_id));
     const bids = allOffers.filter((o) => o.status === "pending" && (o.buyer_email === email || o.buyer_id === uid));
     const gi = document.getElementById("gridInbox");
