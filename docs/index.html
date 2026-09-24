@@ -64,6 +64,7 @@
   .badge.l1{background:var(--green-bg); color:var(--green)}
   .badge.l2{background:var(--red-bg); color:var(--red)}
   .badge.l3{background:var(--amber-bg); color:var(--amber)}
+  .badge.bright{outline:2px solid currentColor; outline-offset:1px}
   .badge.hidden{background:var(--hidden-bg); color:var(--hidden); font-weight:500}
   .note{
     font-family:inherit; font-size:12px; color:var(--ink);
@@ -78,12 +79,13 @@
 
 <div class="wrap">
   <header><h1>密码子进化树</h1></header>
-  <p class="sub">从 <b>11</b> 开始，点 ▸ 逐层展开。 <b>1124</b> 绿门、<b>1123</b> 红门、<b>1122</b> 黄门。第 5 位等于第 4 位才显，不等则隐；第 6 位无论是什么都显，若再等于第 4 位则亮一档。第 7 位起暂不解释。</p>
+  <p class="sub">只画主链，没有隐藏链。从 <b>11</b> 展开到第 6 位。<b>1124</b> 绿、<b>1123</b> 红、<b>1122</b> 黄。第 5 位等于第 4 位才显，不等则隐；第 6 位必显，再等于第 4 位则亮一档。</p>
   <div class="legend">
     <span class="chip"><span class="dot" style="background:var(--green)"></span>绿（1124）</span>
     <span class="chip"><span class="dot" style="background:var(--red)"></span>红（1123）</span>
     <span class="chip"><span class="dot" style="background:var(--amber)"></span>黄（1122）</span>
-    <span class="chip"><span class="dot" style="background:var(--hidden)"></span>隐 / 待激活</span>
+    <span class="chip"><span class="dot" style="background:var(--hidden)"></span>待 / 隐</span>
+    <span class="chip">描边 = 亮一档</span>
   </div>
 
   <div class="toolbar">
@@ -95,7 +97,7 @@
 </div>
 
 <script>
-  const MAX_DEPTH = 8;
+  const MAX_LEN = 6;
   const NOTES_KEY = 'fly-codon-notes';
 
   let notes = {};
@@ -120,14 +122,14 @@
       return { badge:true, cls:'hidden', label: '隐' };
     }
     const bright = chain[5] === d4;
-    return { badge:true, cls:fam.cls, label: bright ? fam.name + '·亮' : fam.name };
+    return { badge:true, cls: fam.cls + (bright ? ' bright' : ''), label: bright ? fam.name + '·亮' : fam.name };
   }
   function children(node){
     return ['1','2','3','4'].map(d => ({ chain: node.chain + d }));
   }
 
   const tree = document.getElementById('tree');
-  const expanded = new Set(['11']);   // 初始只展开根一层
+  const expanded = new Set(['11', '112']);
 
   function toggle(chain){
     if (expanded.has(chain)) expanded.delete(chain);
@@ -139,7 +141,7 @@
     tree.innerHTML = '';
     (function build(parent, chain, depth){
       const st = nodeState(chain);
-      const canOpen = depth < MAX_DEPTH;
+      const canOpen = chain.length < MAX_LEN;
       const isOpen = expanded.has(chain);
       const lit = /^(1124|1123|1122)/.test(chain);
 
