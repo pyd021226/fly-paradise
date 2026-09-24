@@ -79,12 +79,12 @@
 
 <div class="wrap">
   <header><h1>密码子进化树</h1></header>
-  <p class="sub">只画主链，没有隐藏链。从 <b>11</b> 展开到第 6 位。<b>1124</b> 绿、<b>1123</b> 红、<b>1122</b> 黄。第 5 位等于第 4 位才显，不等则隐；第 6 位必显，再等于第 4 位则亮一档。</p>
+  <p class="sub">只画主链，没有隐藏链。从 <b>11</b> 展开到第 6 位。<b>1124</b> 绿、<b>1123</b> 红、<b>1122</b> 黄：第 4 位中了就显。第 5 位等于第 4 位才继续显，不等则隐；第 6 位必显，再等于第 4 位则亮一档。</p>
   <div class="legend">
     <span class="chip"><span class="dot" style="background:var(--green)"></span>绿（1124）</span>
     <span class="chip"><span class="dot" style="background:var(--red)"></span>红（1123）</span>
     <span class="chip"><span class="dot" style="background:var(--amber)"></span>黄（1122）</span>
-    <span class="chip"><span class="dot" style="background:var(--hidden)"></span>待 / 隐</span>
+    <span class="chip"><span class="dot" style="background:var(--hidden)"></span>隐（第5位没对上）</span>
     <span class="chip">描边 = 亮一档</span>
   </div>
 
@@ -115,7 +115,7 @@
     const prefix = chain.slice(0, 4);
     const fam = { '1124': { name:'绿', cls:'l1' }, '1123': { name:'红', cls:'l2' }, '1122': { name:'黄', cls:'l3' } }[prefix];
     if (!fam) return { badge:false };
-    if (chain.length === 4) return { badge:true, cls:'hidden', label: fam.name + '·待' };
+    if (chain.length === 4) return { badge:true, cls:fam.cls, label: fam.name };
     const d4 = prefix[3];
     if (chain.length === 5) {
       if (chain[4] === d4) return { badge:true, cls:fam.cls, label: fam.name };

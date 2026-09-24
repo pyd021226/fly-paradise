@@ -7,11 +7,12 @@ export const FAMILIES = {
 };
 
 export function codonPhenotype(codon) {
-  if (!codon || codon.length < 5) return null;
+  if (!codon || codon.length < 4) return null;
   const prefix = codon.slice(0, 4);
   const color = FAMILIES[prefix];
   if (!color) return null;
   const d4 = prefix[3];
+  if (codon.length === 4) return { color, bright: false };
   if (codon.length === 5) {
     if (codon[4] !== d4) return null;
     return { color, bright: false };
