@@ -178,13 +178,8 @@ function clutchSexes(n) {
   return s;
 }
 
-function isGenoGreen(u) {
-  return u && (u.geneD || 0) >= 2 && (u.geneP || 0) >= 2 && (u.geneG || 0) >= 2;
-}
-
 function isGreenMorph(u) {
-  const m = morphOf(u.geneD, u.geneP, u.geneG, u.geneX, u.geneY);
-  return m === 'green' || m === 'rainbow';
+  return u && (u.color === 'green' || u.color === 'red' || u.color === 'mut');
 }
 
 function breedingAdults() {
@@ -195,27 +190,6 @@ function canPupate() { return !breed || pupae.length < BREED_PUPAE; }
 function canEclose() { return !breed || breedingAdults() < BREED_ADULTS; }
 function canAddAdult() { return canEclose(); }
 function adultsFull() { return breed && breedingAdults() >= BREED_ADULTS; }
-
-function extraAllele(n) {
-  const k = Number(n);
-  if (!Number.isFinite(k) || k <= 0) return 0;
-  if (k >= 2) return 1;
-  return Math.random() < 0.5 ? 1 : 0;
-}
-
-function extraGenes(mom, dad) {
-  const mg = isGenoGreen(mom);
-  const dg = isGenoGreen(dad);
-  if (mg && dg) {
-    return {
-      geneX: extraAllele(mom.geneX) + extraAllele(dad.geneX),
-      geneY: extraAllele(mom.geneY) + extraAllele(dad.geneY),
-    };
-  }
-  if (mg) return { geneX: extraAllele(mom.geneX), geneY: extraAllele(mom.geneY) };
-  if (dg) return { geneX: extraAllele(dad.geneX), geneY: extraAllele(dad.geneY) };
-  return { geneX: 1, geneY: 1 };
-}
 
 let W = innerWidth;
 let H = innerHeight;
@@ -244,6 +218,7 @@ let paused = false;
 let fast = false;
 let watch = false;
 let breed = true;
+let showCodons = false;
 let flavorAnnoy = false;
 let cleared = false;
 let breedMs = 0;
@@ -571,26 +546,13 @@ function pickIcon(preferFood, from, excludeId) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function passRecessive(n) {
-  const k = n == null ? 1 : n;
-  if (k >= 2) return 1;
-  if (k <= 0) return 0;
-  return Math.random() < 0.5 ? 1 : 0;
-}
-
-function inheritGene(a, b) {
-  return passRecessive(a) + passRecessive(b);
-}
-
 function genesFor(morph) {
-  const g = { geneD: 1, geneP: 1, geneG: 0, geneX: 0, geneY: 0 };
-  if (morph === 'deep') { g.geneD = 2; g.geneP = 0; }
-  else if (morph === 'mid') { g.geneD = 0; g.geneP = 2; }
-  else if (morph === 'white') { g.geneD = 2; g.geneP = 2; }
-  else if (morph === 'whiteHet') { g.geneD = 2; g.geneP = 2; g.geneG = 1; }
-  else if (morph === 'green') { g.geneD = 2; g.geneP = 2; g.geneG = 2; g.geneX = 1; g.geneY = 1; }
-  else if (morph === 'rainbow') { g.geneD = 2; g.geneP = 2; g.geneG = 2; g.geneX = 2; g.geneY = 2; }
-  else if (morph === 'wild') { g.geneD = 0; g.geneP = 0; }
+  const g = { color: 'wild' };
+  if (morph === 'deep') g.color = 'deep';
+  else if (morph === 'mid') g.color = 'mid';
+  else if (morph === 'white') g.color = 'white';
+  else if (morph === 'green') g.color = 'green';
+  else if (morph === 'red') g.color = 'red';
   return g;
 }
 
@@ -644,11 +606,9 @@ function spawnFly(x, y, opts = {}) {
     mealDoneAt: 0,
     mates: 0,
     sex: opts.sex || (Math.random() < 0.5 ? 'm' : 'f'),
-    geneD: opts.geneD == null ? 1 : opts.geneD,
-    geneP: opts.geneP == null ? 1 : opts.geneP,
-    geneG: opts.geneG == null ? 0 : opts.geneG,
-    geneX: opts.geneX == null ? 0 : opts.geneX,
-    geneY: opts.geneY == null ? 0 : opts.geneY,
+    serverId: opts.serverId || null,
+    color: opts.color || 'wild',
+    codon: opts.codon || '',
   };
   if (perched) {
     const p = clampToGlyph(perched, f.x + rand(-10, 10), f.y + rand(-8, 8));
@@ -673,11 +633,7 @@ function spawnFromEdge(n, opts = {}) {
     const sex = opts.sex || (n >= 2 && i === 0 ? 'm' : n >= 2 && i === 1 ? 'f' : undefined);
     const f = spawnFly(x + i * 24, y + i * 10, {
       sex,
-      geneD: opts.geneD == null ? genes.geneD : opts.geneD,
-      geneP: opts.geneP == null ? genes.geneP : opts.geneP,
-      geneG: opts.geneG == null ? genes.geneG : opts.geneG,
-      geneX: opts.geneX == null ? genes.geneX : opts.geneX,
-      geneY: opts.geneY == null ? genes.geneY : opts.geneY,
+      color: opts.color || genes.color,
     });
     if (f) {
       placed = true;
@@ -689,7 +645,6 @@ function spawnFromEdge(n, opts = {}) {
       f.heading = rand(0, Math.PI * 2);
     }
   }
-  if (placed && opts.morph === 'rainbow') playRainbowFanfare(performance.now(), true);
 }
 
 function makeCrumb(ic) {
@@ -865,19 +820,62 @@ function spawnFood() {
   foods.push(makeCrumb(ic));
 }
 
+async function spawnServerFlies() {
+  const a = pickIcon(false);
+  const b = pickIcon(false, null, a && a.id);
+  const got = [];
+  for (let i = 0; i < 2; i++) {
+    try {
+      const res = await window.fly.spawnFly();
+      if (res && res.ok && res.fly) got.push(res.fly);
+    } catch (e) { /* 网络失败 */ }
+  }
+  if (!got.length) {
+    if (!booted) boot();
+    return;
+  }
+  flies = [];
+  eggs = [];
+  larvae = [];
+  pupae = [];
+  booted = true;
+  holdBoot = false;
+  for (let i = 0; i < got.length; i++) {
+    const perch = i === 0 ? a : b;
+    const f = spawnFly(0, 0, { perch, sex: i === 0 ? 'm' : 'f', serverId: got[i].id, color: got[i].color, codon: got[i].codon || '' });
+    if (f) f.needMeal = false;
+  }
+  spawnFood();
+  spawnFood();
+  spawnFood();
+}
+
+async function addServerFly(sex) {
+  if (window.fly && window.fly.spawnFly) {
+    try {
+      const res = await window.fly.spawnFly();
+      if (res && res.ok && res.fly) {
+        const f = spawnFly(W * 0.5, H * 0.4, { sex, serverId: res.fly.id, color: res.fly.color, codon: res.fly.codon || '' });
+        if (f) { f.needMeal = true; return; }
+      }
+    } catch (e) { /* 失败走本地 fallback */ }
+  }
+  spawnFromEdge(1, { sex });
+}
+
 function boot() {
   if (booted || holdBoot) return;
   booted = true;
   const a = pickIcon(false);
   const b = pickIcon(false, null, a && a.id);
   if (a) {
-    const f = spawnFly(0, 0, { perch: a, sex: 'm', geneD: 1, geneP: 1, geneG: 1 });
+    const f = spawnFly(0, 0, { perch: a, sex: 'm', color: 'wild' });
     if (f) f.needMeal = false;
-  } else spawnFromEdge(1, { sex: 'm', geneG: 1 });
+  } else spawnFromEdge(1, { sex: 'm' });
   if (b) {
-    const f = spawnFly(0, 0, { perch: b, sex: 'f', geneD: 1, geneP: 1, geneG: 1 });
+    const f = spawnFly(0, 0, { perch: b, sex: 'f', color: 'wild' });
     if (f) f.needMeal = false;
-  } else spawnFromEdge(1, { sex: 'f', geneG: 1 });
+  } else spawnFromEdge(1, { sex: 'f' });
   spawnFood();
   spawnFood();
   spawnFood();
@@ -1559,11 +1557,9 @@ function flyCorpse(fly) {
     seed: fly.seed,
     scale: fly.scale || 1,
     sex: fly.sex,
-    geneD: fly.geneD,
-    geneP: fly.geneP,
-    geneG: fly.geneG,
-    geneX: fly.geneX,
-    geneY: fly.geneY,
+    serverId: fly.serverId,
+    color: fly.color || 'wild',
+    codon: fly.codon || '',
     ageMs: 0,
     wipes: 0,
   };
@@ -1574,6 +1570,7 @@ function killFly(fly, now) {
   addSplat(fly.x, fly.y, now, fly.seed, 1);
   corpses.push(flyCorpse(fly));
   playKillMusic();
+  if (breed && window.fly && window.fly.addPoint) window.fly.addPoint(1);
 }
 
 function addSplat(x, y, now, seed, scale) {
@@ -1728,30 +1725,31 @@ function finishMate(fly, now) {
   if (other && other.state === 'mate') reset(other);
 }
 
-function layEggs(x, y, mom, dad, firstOf, clone) {
+async function layEggs(x, y, mom, dad, firstOf, clone) {
   const want = breed ? 2 + Math.floor(Math.random() * 2) : 6 + Math.floor(Math.random() * 3);
   const room = breed ? Math.max(0, BREED_EGGS - eggs.length) : want;
   const n = Math.min(want, room);
   const from = clone ? null : (firstOf && firstOf.length ? firstOf.slice() : null);
   const sexes = clone ? Array.from({ length: n }, () => (mom && mom.sex) || 'f') : clutchSexes(n);
   for (let i = 0; i < n; i++) {
-    const geneD = clone ? (mom && mom.geneD) : inheritGene(mom && mom.geneD, dad && dad.geneD);
-    const geneP = clone ? (mom && mom.geneP) : inheritGene(mom && mom.geneP, dad && dad.geneP);
-    const geneG = clone ? (mom && mom.geneG) : inheritGene(mom && mom.geneG, dad && dad.geneG);
-    const extra = clone
-      ? { geneX: (mom && mom.geneX) || 0, geneY: (mom && mom.geneY) || 0 }
-      : ((geneD >= 2 && geneP >= 2 && geneG >= 2) ? extraGenes(mom, dad) : { geneX: 0, geneY: 0 });
+    let serverId = null;
+    let color = (mom && mom.color) || 'wild';
+    let codon = '';
+    if (!clone && mom && dad && mom.serverId && dad.serverId && window.fly && window.fly.breed) {
+      try {
+        const res = await window.fly.breed(mom.serverId, dad.serverId);
+        if (res && res.ok && res.fly) { serverId = res.fly.id; color = res.fly.color || 'wild'; codon = res.fly.codon || ''; }
+      } catch (e) { /* 网络失败，用本地 fallback */ }
+    }
     eggs.push({
       x: x + rand(-12, 12),
       y: y + rand(-10, 10),
       rot: rand(0, Math.PI),
       t: performance.now(),
       seed: rand(0, 80),
-      geneD,
-      geneP,
-      geneG,
-      geneX: extra.geneX,
-      geneY: extra.geneY,
+      serverId,
+      color,
+      codon,
       sex: sexes[i],
       firstOf: from,
     });
@@ -1784,15 +1782,12 @@ function intoJar(kind, extra) {
     vy: rand(-30, 30),
     heading: extra.heading || rand(0, Math.PI * 2),
     sex: extra.sex || 'f',
-    geneD: extra.geneD || 0,
-    geneP: extra.geneP || 0,
-    geneG: extra.geneG || 0,
-    geneX: extra.geneX || 0,
-    geneY: extra.geneY || 0,
+    serverId: extra.serverId || null,
+    color: extra.color || 'wild',
+    codon: extra.codon || '',
     instar: extra.instar || 1,
     scale: extra.scale || 1,
     seed: extra.seed || rand(0, 80),
-    glow: !!extra.glow,
     t: extra.t || performance.now(),
     inMs: 0,
   });
@@ -1838,6 +1833,15 @@ function catchNet(now) {
     f.state = 'dead';
   }
   flies = flies.filter((f) => f.state !== 'dead');
+
+  for (const e of eggs) if (inNet(e.x, e.y)) intoJar('egg', e);
+  eggs = eggs.filter((e) => !inNet(e.x, e.y));
+
+  for (const L of larvae) if (inNet(L.x, L.y)) intoJar('larva', L);
+  larvae = larvae.filter((L) => !inNet(L.x, L.y));
+
+  for (const p of pupae) if (inNet(p.x, p.y)) intoJar('pupa', p);
+  pupae = pupae.filter((p) => !inNet(p.x, p.y));
 }
 
 function bounceJar(u) {
@@ -1893,6 +1897,107 @@ function stepJar(dt, now) {
   pruneJarSel();
 }
 
+let listingBusy = false;
+
+async function sellSelectedJar(note) {
+  const caption = String(note || '').trim();
+  if (!caption) { jarHint = '请先备注再上架'; publishJar(); return; }
+  if (listingBusy) { jarHint = '正在上架，别连点'; publishJar(); return; }
+  const sel = [...jarSel];
+  if (!sel.length) { jarHint = '先选中要上架的'; publishJar(); return; }
+  const units = sel.map((id) => jar.find((x) => x.id === id)).filter((u) => u && u.serverId);
+  if (!units.length) { jarHint = '该物品无法上架'; publishJar(); return; }
+  const kind = units[0].kind;
+  const group = units.filter((u) => u.kind === kind);
+  const limited = (kind === 'pupa' || kind === 'fly') ? group.slice(0, 1) : group.slice(0, 3);
+  const flyIds = limited.map((u) => u.serverId);
+  listingBusy = true;
+  jarHint = '上架中…';
+  publishJar();
+  let res;
+  try {
+    res = await window.fly.createListing(kind, flyIds, caption, 'any', limited[0].instar || null, limited[0].color || 'wild');
+  } finally {
+    listingBusy = false;
+  }
+  if (res && res.ok) {
+    const gone = new Set(limited.map((u) => u.id));
+    jar = jar.filter((u) => !gone.has(u.id));
+    for (const id of gone) jarSel.delete(id);
+    jarHint = '已上架';
+  } else if (res && /已经上架过了/.test(res.error || '')) {
+    const gone = new Set(limited.map((u) => u.id));
+    jar = jar.filter((u) => !gone.has(u.id));
+    for (const id of gone) jarSel.delete(id);
+    jarHint = '已上架';
+  } else {
+    jarHint = '上架失败：' + ((res && res.error) || '未知');
+  }
+  publishJar();
+}
+
+async function makeOffer(listingId, note) {
+  if (!listingId) { jarHint = '先点商店里的报价'; publishJar(); return; }
+  if (listingBusy) { jarHint = '正在报价，别连点'; publishJar(); return; }
+  const sel = [...jarSel];
+  if (!sel.length) { jarHint = '先在瓶子里选中要拿来换的'; publishJar(); return; }
+  const units = sel.map((id) => jar.find((x) => x.id === id)).filter((u) => u && u.serverId);
+  if (!units.length) { jarHint = '该物品无法报价'; publishJar(); return; }
+  const kind = units[0].kind;
+  const group = units.filter((u) => u.kind === kind);
+  const limited = (kind === 'pupa' || kind === 'fly') ? group.slice(0, 1) : group.slice(0, 3);
+  const flyIds = limited.map((u) => u.serverId);
+  listingBusy = true;
+  jarHint = '报价中…';
+  publishJar();
+  let res;
+  try {
+    res = await window.fly.createOffer(listingId, kind, flyIds, note, limited[0].color || 'wild', limited[0].instar || null);
+  } finally {
+    listingBusy = false;
+  }
+  if (res && res.ok) {
+    const gone = new Set(limited.map((u) => u.id));
+    jar = jar.filter((u) => !gone.has(u.id));
+    for (const id of gone) jarSel.delete(id);
+    jarHint = '已报价';
+  } else {
+    jarHint = '报价失败：' + ((res && res.error) || '未知');
+  }
+  publishJar();
+}
+
+function restockJar(items) {
+  for (const it of items || []) {
+    if (!it) continue;
+    const sid = it.serverId;
+    if (sid && jar.some((u) => u.serverId === sid)) continue;
+    intoJar(it.kind || 'fly', {
+      serverId: sid,
+      color: it.color || 'wild',
+      codon: it.codon || '',
+      instar: it.instar || 1,
+    });
+  }
+  jarHint = items && items.length ? '已下架回瓶' : '已下架';
+  publishJar();
+}
+
+async function unlistToJar(id) {
+  if (!id || !window.fly || !window.fly.unlistListing) {
+    jarHint = '下架失败';
+    publishJar();
+    return;
+  }
+  const res = await window.fly.unlistListing(id);
+  const items = (res && res.data && res.data.items) || (res && res.items) || [];
+  if (res && res.ok) restockJar(items);
+  else {
+    jarHint = '下架失败：' + ((res && res.error) || '未知');
+    publishJar();
+  }
+}
+
 function publishJar() {
   if (!window.fly || !window.fly.sendBottle) return;
   window.fly.sendBottle({ hint: jarHint, count: jar.length });
@@ -1939,7 +2044,7 @@ function jarFree(id) {
       id: nextId++, kind: 'fly',
       x: drop.x + rand(-6, 6), y: drop.y + rand(-6, 6),
       heading: u.heading, seed: u.seed, scale: u.scale || 1, sex: u.sex,
-      geneD: u.geneD, geneP: u.geneP, geneG: u.geneG, geneX: u.geneX, geneY: u.geneY,
+      serverId: u.serverId, color: u.color || 'wild', codon: u.codon || '',
       ageMs: 0, wipes: 0,
     });
     jar = jar.filter((x) => x.id !== id);
@@ -1955,7 +2060,7 @@ function jarFree(id) {
   }
   if (u.kind === 'fly') {
     const f = spawnFly(drop.x, drop.y, {
-      sex: u.sex, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG, geneX: u.geneX, geneY: u.geneY,
+      sex: u.sex, serverId: u.serverId, color: u.color || 'wild', codon: u.codon || '',
     });
     if (!f) {
       jarHint = '成虫已满 12，放不出。';
@@ -1969,22 +2074,20 @@ function jarFree(id) {
     if (breed && eggs.length >= BREED_EGGS) { jarHint = '卵已满，放不出。'; publishJar(); return; }
     eggs.push({
       x: drop.x + rand(-10, 10), y: drop.y + rand(-10, 10), rot: rand(0, Math.PI),
-      t: performance.now(), seed: u.seed, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG,
-      geneX: u.geneX, geneY: u.geneY, sex: u.sex, firstOf: null,
+      t: performance.now(), seed: u.seed, serverId: u.serverId, color: u.color || 'wild', codon: u.codon || '', sex: u.sex, firstOf: null,
     });
   } else if (u.kind === 'larva') {
     if (breed && larvae.length >= BREED_LARVAE) { jarHint = '蛆已满，放不出。'; publishJar(); return; }
     larvae.push({
       id: nextId++, x: drop.x, y: drop.y, heading: u.heading, instar: u.instar || 1,
       eatTimer: 0, skipFood: 0, eatingFood: 0, eatUnits: 0, nextTurn: performance.now(),
-      seed: u.seed, vx: 0, vy: 0, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG,
-      geneX: u.geneX, geneY: u.geneY, sex: u.sex, firstOf: null,
+      seed: u.seed, vx: 0, vy: 0, serverId: u.serverId, color: u.color || 'wild', codon: u.codon || '', sex: u.sex, firstOf: null,
     });
   } else if (u.kind === 'pupa') {
     if (breed && pupae.length >= BREED_PUPAE) { jarHint = '蛹已满，放不出。'; publishJar(); return; }
     pupae.push({
       x: drop.x, y: drop.y, rot: u.heading, t: u.t, seed: u.seed,
-      geneD: u.geneD, geneP: u.geneP, geneG: u.geneG, geneX: u.geneX, geneY: u.geneY,
+      serverId: u.serverId, color: u.color || 'wild', codon: u.codon || '',
       sex: u.sex, firstOf: null,
     });
   }
@@ -2049,14 +2152,13 @@ function drawBottle(now) {
       if (u.dead) {
         drawCorpse({
           x: u.x, y: u.y, heading: u.heading, seed: u.seed, scale: (u.scale || 1) * 1.5,
-          sex: u.sex, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG, geneX: u.geneX, geneY: u.geneY,
+          sex: u.sex, serverId: u.serverId, color: u.color || 'wild', codon: u.codon || '',
         });
       } else {
         drawFly({
           x: u.x, y: u.y, scale: (u.scale || 1) * 1.5, sex: u.sex,
           visHead: u.heading, heading: u.heading, state: 'fly',
-          seed: u.seed, geneD: u.geneD, geneP: u.geneP, geneG: u.geneG,
-          geneX: u.geneX, geneY: u.geneY, crawling: false, mateRole: 0, glow: u.glow,
+          seed: u.seed, serverId: u.serverId, color: u.color || 'wild', codon: u.codon || '', crawling: false, mateRole: 0,
         }, now);
       }
     } else if (u.kind === 'egg') {
@@ -2152,11 +2254,9 @@ function hatchEgg(e, now) {
     seed: e.seed,
     vx: 0,
     vy: 0,
-    geneD: e.geneD,
-    geneP: e.geneP,
-    geneG: e.geneG,
-    geneX: e.geneX || 0,
-    geneY: e.geneY || 0,
+    serverId: e.serverId,
+    color: e.color || 'wild',
+    codon: e.codon || '',
     sex: e.sex,
     firstOf: e.firstOf || null,
   });
@@ -2255,18 +2355,16 @@ function pupate(L, now) {
     rot: L.heading,
     t: now,
     seed: L.seed,
-    geneD: L.geneD,
-    geneP: L.geneP,
-    geneG: L.geneG,
-    geneX: L.geneX || 0,
-    geneY: L.geneY || 0,
+    serverId: L.serverId,
+    color: L.color || 'wild',
+    codon: L.codon || '',
     sex: L.sex,
     firstOf: L.firstOf || null,
   });
 }
 
 function eclose(p, now) {
-  const f = spawnFly(p.x, p.y, { geneD: p.geneD, geneP: p.geneP, geneG: p.geneG, geneX: p.geneX, geneY: p.geneY, sex: p.sex });
+  const f = spawnFly(p.x, p.y, { serverId: p.serverId, color: p.color, codon: p.codon, sex: p.sex });
   if (!f) return false;
   shells.push({ x: p.x, y: p.y, rot: p.rot, seed: p.seed });
   f.needMeal = true;
@@ -2277,9 +2375,8 @@ function eclose(p, now) {
   f.vx = Math.cos(f.heading) * 320;
   f.vy = Math.sin(f.heading) * 320;
   f.takeoffUntil = now + 700;
-  if (morphOf(f.geneD, f.geneP, f.geneG, f.geneX, f.geneY) === 'rainbow') {
-    if (Math.random() < 0.05) f.glow = true;
-    playRainbowFanfare(now);
+  if (breed && (f.color === 'red' || f.color === 'mut') && f.serverId && window.fly && window.fly.submitMutation) {
+    window.fly.submitMutation(f.serverId);
   }
   noteFirstEclose(p.firstOf, now);
   return true;
@@ -2294,22 +2391,6 @@ function noteFirstEclose(firstOf, now) {
     parent.kidSeen = true;
     parent.kidDieAt = now + wait;
   }
-}
-
-function spawnGlow() {
-  const f = spawnFly(W * 0.5, H * 0.4, {
-    force: true, geneD: 2, geneP: 2, geneG: 2, geneX: 2, geneY: 2, sex: Math.random() < 0.5 ? 'm' : 'f',
-  });
-  if (!f) return;
-  f.glow = true;
-  f.needMeal = true;
-  f.state = 'fly';
-  f.mission = 'land';
-  f.heading = rand(0, Math.PI * 2);
-  f.visHead = f.heading;
-  f.vx = Math.cos(f.heading) * 320;
-  f.vy = Math.sin(f.heading) * 320;
-  f.takeoffUntil = performance.now() + 700;
 }
 
 function foodOpen(food) {
@@ -2674,7 +2755,7 @@ function step(dt, now) {
       extinctSince = now;
       respawnIn = (RESPAWN_MIN + Math.random() * (RESPAWN_MAX - RESPAWN_MIN)) * 1000;
     } else if (now - extinctSince > respawnIn) {
-      spawnFromEdge(2, { geneG: 1 });
+      spawnFromEdge(2, {});
       spawnFood();
       extinctSince = 0;
     }
@@ -2772,7 +2853,8 @@ const PALETTE = {
   deep: { thorax: '#4a2c12', thoraxDark: '#8a5a28', abdomen: '#6b4524', band: '#1a0e08', head: '#3a220e', leg: '#4a3218' },
   white: { thorax: '#f3eee4', thoraxDark: '#d8d0c4', abdomen: '#fffcf6', band: '#6b6358', head: '#efe8dc', leg: '#c4b8a8' },
   green: { thorax: '#1aa85a', thoraxDark: '#c8f080', abdomen: '#148a48', band: '#0d3a20', head: '#127a40', leg: '#1a5a32' },
-  rainbow: { thorax: '#e23d7a', thoraxDark: '#7a3dff', abdomen: '#3dd4e2', band: '#1a1030', head: '#f0c040', leg: '#6a4cff' },
+  red: { thorax: '#c0392b', thoraxDark: '#e08060', abdomen: '#96281b', band: '#3d0f08', head: '#8e2018', leg: '#6a201a' },
+  mut: { thorax: '#c8932a', thoraxDark: '#e0b048', abdomen: '#a3741d', band: '#3d2a08', head: '#8a6420', leg: '#6a4a1a' },
 };
 
 const PALETTE_DEAD = {
@@ -2781,43 +2863,12 @@ const PALETTE_DEAD = {
   deep: { thorax: '#2a180c', thoraxDark: '#140c06', abdomen: '#4a3020', band: '#100804', head: '#241408', leg: '#2a1c10' },
   white: { thorax: '#b8b0a4', thoraxDark: '#7a7468', abdomen: '#d4ccc0', band: '#4a443c', head: '#a0988c', leg: '#8a8278' },
   green: { thorax: '#2a5a38', thoraxDark: '#143820', abdomen: '#3a6a44', band: '#0c2014', head: '#1e4028', leg: '#244830' },
-  rainbow: { thorax: '#5a2848', thoraxDark: '#2a1840', abdomen: '#28485a', band: '#140c20', head: '#5a4830', leg: '#30245a' },
+  red: { thorax: '#5a2820', thoraxDark: '#3a1410', abdomen: '#4a221a', band: '#1a0c08', head: '#3e1c16', leg: '#301a14' },
+  mut: { thorax: '#5a4a20', thoraxDark: '#3a2c10', abdomen: '#4a3c1a', band: '#1a1408', head: '#3e3416', leg: '#302814' },
 };
 
-function morphOf(geneD, geneP, geneG, geneX, geneY) {
-  const dark = (geneD || 0) >= 2;
-  const mid = (geneP || 0) >= 2;
-  const green = (geneG || 0) >= 2;
-  if (dark && mid && green) {
-    if ((geneX || 0) >= 2 && (geneY || 0) >= 2) return 'rainbow';
-    return 'green';
-  }
-  if (dark && mid) return 'white';
-  if (dark) return 'deep';
-  if (mid) return 'mid';
-  return 'wild';
-}
-
-function paintRainbow(seed, now) {
-  const h = ((now || 0) * 0.09 + (seed || 0) * 47) % 360;
-  COL.thorax = `hsl(${h}, 82%, 50%)`;
-  COL.thoraxDark = `hsl(${(h + 48) % 360}, 72%, 38%)`;
-  COL.abdomen = `hsl(${(h + 96) % 360}, 78%, 56%)`;
-  COL.band = `hsl(${(h + 180) % 360}, 40%, 18%)`;
-  COL.head = `hsl(${(h + 24) % 360}, 80%, 44%)`;
-  COL.leg = `hsl(${(h + 60) % 360}, 48%, 36%)`;
-  COL.eye = `hsl(${(h + 300) % 360}, 70%, 52%)`;
-  COL.eyeDark = `hsl(${(h + 300) % 360}, 55%, 28%)`;
-  COL.eyeHi = `hsl(${(h + 300) % 360}, 70%, 78%)`;
-}
-
 function applyBody(src, male, dead, now) {
-  const morph = morphOf(src.geneD, src.geneP, src.geneG, src.geneX, src.geneY);
-  if (morph === 'rainbow' && !dead) {
-    paintRainbow(src.seed, now);
-    COL.maleTip = male ? '#140c08' : null;
-    return;
-  }
+  const morph = src.color || 'wild';
   const p = (dead ? PALETTE_DEAD : PALETTE)[morph] || PALETTE.wild;
   COL.thorax = p.thorax;
   COL.thoraxDark = p.thoraxDark;
@@ -3185,18 +3236,6 @@ function drawFly(fly, now) {
   applyBody(fly, fly.sex === 'm', false, now);
   ctx.save();
   ctx.translate(fly.x, fly.y);
-  if (fly.glow) {
-    const pulse = 0.55 + 0.45 * Math.sin(now * 0.005 + fly.seed);
-    const r = 18 * pulse;
-    const g = ctx.createRadialGradient(0, 0, 1, 0, 0, r);
-    g.addColorStop(0, 'rgba(255,246,180,0.9)');
-    g.addColorStop(0.5, 'rgba(255,220,120,0.32)');
-    g.addColorStop(1, 'rgba(255,220,120,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
   if (fly.state === 'mate') {
     ctx.translate(fly.mateRole ? 5 : 0, fly.mateRole ? -4 : 0);
     ctx.rotate(Math.sin(now * 0.02 + fly.seed) * 0.18);
@@ -3458,6 +3497,23 @@ function drawSwatter() {
   ctx.restore();
 }
 
+function drawCodons() {
+  ctx.save();
+  ctx.font = '11px "Consolas", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.lineWidth = 3;
+  for (const f of flies) {
+    if (f.state === 'dead') continue;
+    const label = f.codon || f.color || '?';
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeText(label, f.x, f.y - 12);
+    ctx.fillStyle = 'rgba(0,0,0,0.8)';
+    ctx.fillText(label, f.x, f.y - 12);
+  }
+  ctx.restore();
+}
+
 function draw(now) {
   ctx.clearRect(0, 0, W, H);
   if (swatterOn || ragOn || netOn) {
@@ -3473,6 +3529,7 @@ function draw(now) {
   for (const s of splats) drawSplat(s);
   for (const c of corpses) drawCorpse(c);
   for (const f of flies) drawFly(f, now);
+  if (showCodons) drawCodons();
   if (swatterOn) drawSwatter();
   if (ragOn) {
     drawRag();
@@ -3518,8 +3575,10 @@ function drawFanfare(now) {
 
 function checkClear() {
   if (!breed || cleared) return;
-  const active = flies.filter((f) => f.state !== 'dead' && !f.retired && !f.dieAt);
-  if (active.length === BREED_ADULTS && active.every(isGreenMorph)) cleared = true;
+  if (flies.some((f) => f.color === 'green')) {
+    cleared = true;
+    if (window.fly && window.fly.submitRecord) window.fly.submitRecord(Math.round(breedMs));
+  }
 }
 
 function publishLife() {
@@ -3538,12 +3597,13 @@ function publishLife() {
     deep: { n: 0, f: 0, m: 0 },
     white: { n: 0, f: 0, m: 0 },
     green: { n: 0, f: 0, m: 0 },
-    rainbow: { n: 0, f: 0, m: 0 },
+    red: { n: 0, f: 0, m: 0 },
+    mut: { n: 0, f: 0, m: 0 },
   };
   let adultF = 0;
   let adultM = 0;
   for (const f of flies) {
-    const key = morphOf(f.geneD, f.geneP, f.geneG, f.geneX, f.geneY);
+    const key = f.color || 'wild';
     const slot = morphs[key] || morphs.wild;
     slot.n += 1;
     if (f.sex === 'f') {
@@ -3564,7 +3624,8 @@ function publishLife() {
     adultF,
     adultM,
     green: morphs.green.n,
-    rainbow: morphs.rainbow.n,
+    red: morphs.red.n,
+    mut: morphs.mut.n,
     wild: morphs.wild.n,
     mid: morphs.mid.n,
     deep: morphs.deep.n,
@@ -3574,7 +3635,8 @@ function publishLife() {
     deepF: morphs.deep.f, deepM: morphs.deep.m,
     whiteF: morphs.white.f, whiteM: morphs.white.m,
     greenF: morphs.green.f, greenM: morphs.green.m,
-    rainbowF: morphs.rainbow.f, rainbowM: morphs.rainbow.m,
+    redF: morphs.red.f, redM: morphs.red.m,
+    mutF: morphs.mut.f, mutM: morphs.mut.m,
     breed,
     cleared,
     breedMs,
@@ -3615,7 +3677,7 @@ function snapshot() {
     return o;
   };
   return {
-    v: 1,
+    v: 2,
     breed,
     cleared,
     breedMs,
@@ -3647,7 +3709,7 @@ function snapshot() {
 }
 
 function applyRestore(data) {
-  if (!data || data.v !== 1) {
+  if (!data || data.v !== 2) {
     holdBoot = false;
     if (icons.length) boot();
     return;
@@ -3893,6 +3955,10 @@ if (api) {
     if (d.name === 'jarSelectAll') jarSelectAll();
     if (d.name === 'jarKillSel') jarKillSel();
     if (d.name === 'jarFreeSel') jarFreeSel();
+    if (d.name === 'jarSell') sellSelectedJar(d.note || '');
+    if (d.name === 'makeOffer') makeOffer(d.listingId, d.note || '');
+    if (d.name === 'jarRestock') restockJar(d.items || []);
+    if (d.name === 'jarUnlist') unlistToJar(d.id);
     if (d.name === 'capture') captureOpen = !!d.value;
     if (d.name === 'breed') {
       if (!flavorAnnoy) {
@@ -3901,16 +3967,11 @@ if (api) {
       }
     }
     if (d.name === 'addFly') {
-      const opts = { morph: d.morph, sex: d.sex };
-      if (!d.morph) {
-        opts.geneD = 1;
-        opts.geneP = 1;
-        opts.geneG = 1;
-      }
-      spawnFromEdge(1, opts);
+      addServerFly(d.sex);
     }
-    if (d.name === 'spawnGlow') spawnGlow();
     if (d.name === 'scareAll') scareAll(performance.now());
+    if (d.name === 'codonShow') showCodons = !showCodons;
+    if (d.name === 'loggedIn') spawnServerFlies();
     if (d.name === 'boot') boot();
     if (d.name === 'startFresh') startFresh();
     if (d.name === 'restore' && d.data) applyRestore(d.data);

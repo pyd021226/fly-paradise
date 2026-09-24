@@ -1,0 +1,217 @@
+<title>果蝇商店</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --paper:#f4efe6; --ink:#2a241c; --muted:#7a7166; --line:#ddd4c6; --btn:#fffdf8; --pink:#e23d7a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.45 "IBM Plex Sans", "Microsoft YaHei", sans-serif; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  input, button { font: inherit; }
+  input { width: 100%; border: 1px solid var(--line); background: var(--btn); border-radius: 10px; padding: 10px 12px; margin: 0 0 8px; }
+  button { border: 1px solid var(--line); background: var(--btn); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+  button.primary { background: var(--pink); color: #fff; border-color: transparent; font-weight: 650; width: 100%; }
+  button.off { background: #2a241c; color: #fff; border-color: transparent; font-size: 13px; padding: 6px 10px; }
+  .tip { color: var(--pink); min-height: 1.3em; font-size: 13px; margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .card { border: 1px solid var(--line); background: var(--btn); border-radius: 10px; padding: 10px; min-width: 0; }
+  .card .note { font-weight: 600; margin: 0 0 4px; word-break: break-word; }
+  .card .who { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  .card .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .mine { font-size: 12px; color: var(--pink); }
+  #shop, #me { display: none; }
+  #me { margin-top: 28px; }
+  .fly { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+</style>
+<div class="wrap">
+  <h1>果蝇商店</h1>
+  <p class="sub">和游戏同一个账号。上架请仍在游戏瓶子里操作；这里看商店、下架、报价、接受交换。</p>
+  <p class="tip" id="tip"></p>
+  <div id="login">
+    <input id="email" type="email" placeholder="邮箱">
+    <input id="password" type="password" placeholder="密码">
+    <button class="primary" id="loginBtn" type="button">登录</button>
+  </div>
+  <div id="shop">
+    <div class="grid" id="grid"></div>
+  </div>
+  <div id="me">
+    <h1>我的果蝇（报价用）</h1>
+    <p class="sub">勾选要拿去换的，再点某张卡上的「用勾选报价」。</p>
+    <div id="flies"></div>
+  </div>
+</div>
+<script>
+  const URL = "https://asfhegiiqhgaodpmqvlh.supabase.co";
+  const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzZmhlZ2lpcWhnYW9kcG1xdmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNDU0MDAsImV4cCI6MjEwNTcyMTQwMH0._iFe4e77vDLX6vreQE8jci7az8_t1_U1sdnspmiALbQ";
+  const KEY = "fly-shop-session";
+  const kindName = { fly: "果蝇", egg: "卵", larva: "蛆", pupa: "蛹" };
+  let token = "";
+  let email = "";
+  let uid = "";
+  let tipTimer = 0;
+
+  function tip(t) {
+    const el = document.getElementById("tip");
+    el.textContent = t || "";
+    clearTimeout(tipTimer);
+    if (!t) return;
+    const keep = t;
+    tipTimer = setTimeout(() => { if (el.textContent === keep) el.textContent = ""; }, 3000);
+  }
+  function headers(extra) {
+    return Object.assign({ apikey: ANON, Authorization: "Bearer " + token, "Content-Type": "application/json" }, extra || {});
+  }
+  async function req(path, opts) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const r = await fetch(URL + path, Object.assign({ headers: headers(), signal: ctrl.signal }, opts || {}));
+      const text = await r.text();
+      let body = {};
+      try { body = text ? JSON.parse(text) : {}; } catch { body = { raw: text }; }
+      if (!r.ok) throw new Error(body.message || body.error || ("HTTP " + r.status));
+      return body;
+    } finally { clearTimeout(t); }
+  }
+
+  async function login() {
+    const em = document.getElementById("email").value.trim();
+    const pw = document.getElementById("password").value;
+    if (!em || !pw) { tip("填邮箱和密码"); return; }
+    tip("登录中…");
+    const body = await req("/auth/v1/token?grant_type=password", {
+      method: "POST",
+      headers: { apikey: ANON, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: em, password: pw }),
+    });
+    token = body.access_token;
+    email = body.user && body.user.email;
+    uid = body.user && body.user.id;
+    try { localStorage.setItem(KEY, JSON.stringify({ access_token: token, email, uid, refresh_token: body.refresh_token })); } catch (e) {}
+    document.getElementById("login").style.display = "none";
+    document.getElementById("shop").style.display = "block";
+    document.getElementById("me").style.display = "block";
+    tip("已登录");
+    await refresh();
+  }
+
+  function selectedFlyIds() {
+    return [...document.querySelectorAll("#flies input:checked")].map((x) => x.value);
+  }
+
+  async function refresh() {
+    const listings = await req("/rest/v1/listings?status=eq.open&select=id,seller_id,seller_email,kind,color,note,quantity,fly_id,fly_ids&order=created_at.desc&limit=50");
+    let offers = [];
+    try {
+      offers = await req("/rest/v1/offers?select=id,listing_id,buyer_email,kind,color,note,fly_id,fly_ids,status&status=eq.pending&order=created_at.desc&limit=50");
+    } catch (e) { offers = []; }
+    const by = {};
+    for (const o of offers || []) (by[o.listing_id] || (by[o.listing_id] = [])).push(o);
+    const grid = document.getElementById("grid");
+    grid.innerHTML = "";
+    if (!listings.length) {
+      grid.innerHTML = "<p class='sub'>暂无上架</p>";
+    }
+    for (const l of listings) {
+      const mine = l.seller_id === uid || l.seller_email === email;
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = "<div class='note'></div><div class='who'></div><div class='row'></div>";
+      card.querySelector(".note").textContent = l.note || kindName[l.kind] || l.kind;
+      card.querySelector(".who").textContent = (l.seller_email || "").split("@")[0] + (mine ? " · 我的" : "");
+      const row = card.querySelector(".row");
+      if (mine) {
+        const u = document.createElement("button");
+        u.className = "off";
+        u.textContent = "下架";
+        u.onclick = async () => {
+          try {
+            await req("/rest/v1/listings?id=eq." + l.id, { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify({ status: "closed" }) });
+            tip("已下架");
+            await refresh();
+          } catch (e) { tip("下架失败：" + e.message); }
+        };
+        row.appendChild(u);
+        for (const o of by[l.id] || []) {
+          const p = document.createElement("div");
+          p.className = "who";
+          p.textContent = (o.buyer_email || "").split("@")[0] + " 用" + (kindName[o.kind] || o.kind) + (o.note ? "·" + o.note : "") + "换";
+          card.appendChild(p);
+          const acc = document.createElement("button");
+          acc.className = "off"; acc.textContent = "接受";
+          acc.onclick = async () => {
+            try {
+              await req("/rest/v1/rpc/accept_offer", { method: "POST", body: JSON.stringify({ p_offer_id: o.id }) });
+              tip("已交换");
+              await refresh();
+            } catch (e) { tip("接受失败：" + e.message); }
+          };
+          const rej = document.createElement("button");
+          rej.className = "off"; rej.textContent = "拒绝";
+          rej.onclick = async () => {
+            try {
+              await req("/rest/v1/offers?id=eq." + o.id, { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify({ status: "rejected" }) });
+              tip("已拒绝");
+              await refresh();
+            } catch (e) { tip("拒绝失败：" + e.message); }
+          };
+          row.appendChild(acc); row.appendChild(rej);
+        }
+      }
+      const bid = document.createElement("button");
+      bid.className = "off";
+      bid.textContent = "用勾选报价";
+      bid.onclick = async () => {
+        const ids = selectedFlyIds();
+        if (!ids.length) { tip("先在下方勾选要拿去换的果蝇"); return; }
+        try {
+          await req("/rest/v1/offers", {
+            method: "POST",
+            headers: headers({ Prefer: "return=minimal" }),
+            body: JSON.stringify({
+              listing_id: l.id, buyer_id: uid, buyer_email: email,
+              kind: "fly", fly_id: ids[0], fly_ids: ids.slice(0, 3), quantity: Math.min(3, ids.length),
+              color: "wild", note: "", status: "pending",
+            }),
+          });
+          tip("已报价");
+          await refresh();
+        } catch (e) { tip("报价失败：" + e.message); }
+      };
+      row.appendChild(bid);
+      grid.appendChild(card);
+    }
+    try {
+      const flies = await req("/rest/v1/flies?select=id,color,level&order=created_at.desc&limit=40");
+      const box = document.getElementById("flies");
+      box.innerHTML = "";
+      for (const f of flies) {
+        const row = document.createElement("label");
+        row.className = "fly";
+        row.innerHTML = "<input type='checkbox'><span></span>";
+        row.querySelector("input").value = f.id;
+        row.querySelector("span").textContent = (f.color || "wild") + " · " + f.id.slice(0, 8);
+        box.appendChild(row);
+      }
+      if (!flies.length) box.textContent = "服务器上还没有你的果蝇。先在游戏里养。";
+    } catch (e) {
+      document.getElementById("flies").textContent = "读不到果蝇：" + e.message;
+    }
+  }
+
+  document.getElementById("loginBtn").onclick = () => login().catch((e) => tip(e.message));
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (s && s.access_token) {
+      token = s.access_token; email = s.email; uid = s.uid;
+      document.getElementById("login").style.display = "none";
+      document.getElementById("shop").style.display = "block";
+      document.getElementById("me").style.display = "block";
+      refresh().catch((e) => tip(e.message));
+    }
+  } catch (e) {}
+</script>

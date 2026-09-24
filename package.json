@@ -15,6 +15,7 @@
   "license": "MIT",
   "author": "desktop-fly-pet",
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.1",
     "koffi": "^3.3.0"
   },
   "devDependencies": {
@@ -43,7 +44,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },

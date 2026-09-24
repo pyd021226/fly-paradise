@@ -27,6 +27,10 @@
       color: var(--pink);
       margin: 0 0 8px;
     }
+    #shopStatus {
+      min-height: 1.2em;
+      margin: -8px 0 12px;
+    }
     #captureSection { display: none; }
     #captureSection.open { display: block; }
     h1 {
@@ -124,13 +128,79 @@
       line-height: 1.45;
     }
     #gate { display: none; }
-    body.gate main > :not(#gate) { display: none; }
+    body.gate #login { display: none; }
+    body.gate #game { display: block; }
+    body.gate #game > :not(#gate) { display: none; }
     body.gate #gate { display: block; }
+    input {
+      display: block;
+      width: 100%;
+      border: 1px solid var(--line);
+      background: var(--btn);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin: 0 0 8px;
+      font: inherit;
+      box-sizing: border-box;
+    }
+    #login { display: none; }
+    #game { display: block; }
+    body.need-login #login { display: block; }
+    body.need-login #game { display: none; }
+    #shop { padding: 10px 8px 12px; overflow: hidden; }
+    .shop-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .shop-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fffdf8;
+      padding: 4px 3px 6px;
+      text-align: center;
+      min-width: 0;
+    }
+    .shop-card canvas { display: block; width: 100%; height: 48px; }
+    .shop-card .qty { font-size: 11px; color: var(--muted); }
+    .shop-card .who { font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .shop-card .cap {
+      font-size: 11px;
+      color: var(--ink);
+      margin-top: 2px;
+      min-height: 2.4em;
+      word-break: break-word;
+    }
+    .shop-card .off {
+      display: block;
+      width: 100%;
+      margin: 4px 0 0;
+      padding: 6px 0;
+      font-size: 12px;
+      font-weight: 650;
+      border-radius: 6px;
+      background: #2a241c;
+      color: #fff;
+      border-color: transparent;
+      position: relative;
+      z-index: 2;
+    }
   </style>
 </head>
 <body>
 <div class="layout">
   <main>
+    <div id="login">
+      <h1>果蝇乐园</h1>
+      <p class="hint">登录后开始养果蝇。</p>
+      <input id="loginEmail" type="email" placeholder="邮箱">
+      <input id="loginPassword" type="password" placeholder="密码">
+      <button class="primary" id="loginBtn" type="button">登录</button>
+      <p class="hint" id="loginMsg"></p>
+    </div>
+    <div id="game">
     <div id="gate">
       <h1>上次繁殖还在</h1>
       <p class="hint">继续接着养，或清场重开。</p>
@@ -139,7 +209,12 @@
     </div>
     <h1>果蝇乐园</h1>
     <p class="hint" id="hint">苍蝇在桌面上。点下面拿拍去打，Esc 收起。</p>
-    <div class="stats" id="stats">成虫 0　卵 0　蛆 0/0/0　蛹 0<br><span class="m">褐色（A_B_C_/A_B_cc） 0</span><span class="m">中褐（A_bbC_/A_bbcc） 0</span><span class="m">深褐（aaB_C_/aaB_cc） 0</span><span class="m">白色（aabbC_） 0</span><span class="m">绿色（aabbcc） 0</span></div>
+    <div class="stats" id="stats">成虫 0　卵 0　蛆 0/0/0　蛹 0<br><span class="m">褐色 0</span><span class="m">中褐 0</span><span class="m">深褐 0</span><span class="m">白色 0</span></div>
+    <div class="stats" id="points">积分 0</div>
+    <div class="stats" id="leaderboard">排行榜加载中…</div>
+    <div class="stats" id="shop">商店加载中…</div>
+    <p class="jar-msg" id="shopStatus"></p>
+    <button id="openShop" type="button">打开商店网页</button>
     <button id="xray" type="button">全图透视</button>
     <button class="primary" id="swatter" type="button">拿出苍蝇拍</button>
     <button id="rag" type="button">拿出抹布</button>
@@ -148,7 +223,8 @@
       <button id="net" type="button">拿出捕网</button>
       <p class="note">瓶内待满 2 分钟会死亡，留下尸体。</p>
       <p class="jar-msg" id="jarMsg"></p>
-      <div class="row"><button id="jarAll" type="button">瓶内全选</button></div>
+      <input id="sellNote" type="text" placeholder="备注这是什么（写在图下）" maxlength="40">
+      <div class="row"><button id="jarAll" type="button">瓶内全选</button><button id="jarSell" type="button">上架选中</button></div>
       <button id="jarFree" type="button">放回选中</button>
     </div>
     <p class="note">按 Esc 退出</p>
@@ -158,9 +234,11 @@
       <label><input id="sexM" type="checkbox" checked>雄</label>
     </div>
     <button id="scare" type="button">吓它们</button>
+    <button id="codon" type="button">显示基因码</button>
     <button id="fast" type="button">快进</button>
     <button id="quit" type="button">退出</button>
     <label class="foot"><input id="autoStart" type="checkbox">开机启动</label>
+    </div>
   </main>
 </div>
   <script src="./panel.js"></script>

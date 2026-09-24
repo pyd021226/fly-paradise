@@ -2,7 +2,7 @@
 // Overlay spans the virtual desktop; the panel is the app the user opens.
 
 import {
-  app, BrowserWindow, screen, globalShortcut, ipcMain,
+  app, BrowserWindow, screen, globalShortcut, ipcMain, shell,
 } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -11,6 +11,7 @@ import { fetchLiveIcons } from './src/icons.js';
 import { fetchIconRects } from './src/icon-rects.js';
 import { startRawMouse, stopRawMouse } from './src/raw-mouse.js';
 import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs } from './src/desktop-layer.js';
+import * as flyApi from './server-client.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(HERE, 'assets', 'tray.png');
@@ -549,6 +550,7 @@ if (!app.requestSingleInstanceLock()) {
     STATS_FILE = path.join(app.getPath('userData'), 'fly-stats.json');
     SAVE_FILE = path.join(app.getPath('userData'), 'fly-save.json');
     SETTINGS_FILE = path.join(app.getPath('userData'), 'fly-settings.json');
+    flyApi.initSession(path.join(app.getPath('userData'), 'fly-session.json'));
     loadSettings();
     applyAutoStart();
     try {
@@ -650,6 +652,16 @@ if (!app.requestSingleInstanceLock()) {
         send('cmd', { name, id: msg.id });
       } else if (name === 'jarSelectAll' || name === 'jarFreeSel') {
         send('cmd', { name });
+      } else if (name === 'openShop') {
+        shell.openExternal('https://pyd021226.github.io/fly-paradise/shop.html');
+      } else if (name === 'jarSell') {
+        send('cmd', { name: 'jarSell', note: msg.note || '' });
+      } else if (name === 'makeOffer') {
+        send('cmd', { name: 'makeOffer', listingId: msg.listingId, note: msg.note || '' });
+      } else if (name === 'jarRestock') {
+        send('cmd', { name: 'jarRestock', items: msg.items || [] });
+      } else if (name === 'jarUnlist') {
+        send('cmd', { name: 'jarUnlist', id: msg.id });
       } else if (name === 'capture') {
         captureOpen = !!(msg && msg.open);
         send('cmd', { name: 'capture', value: captureOpen });
@@ -662,8 +674,10 @@ if (!app.requestSingleInstanceLock()) {
         putAwaySwatter();
       } else if (name === 'addFly') {
         send('cmd', { name: 'addFly', morph: msg.morph, sex: msg.sex });
-      } else if (name === 'spawnGlow') {
-        send('cmd', { name: 'spawnGlow' });
+      } else if (name === 'codon') {
+        send('cmd', { name: 'codonShow' });
+      } else if (name === 'logged-in') {
+        send('cmd', { name: 'loggedIn' });
       } else if (name === 'scareAll') {
         send('cmd', { name: 'scareAll' });
       } else if (name === 'pause') {
@@ -701,6 +715,25 @@ if (!app.requestSingleInstanceLock()) {
         quitApp();
       }
     });
+
+    ipcMain.handle('fly-signin', async (_e, arg) => flyApi.signIn(arg.email, arg.password));
+    ipcMain.handle('fly-signout', async () => flyApi.signOut());
+    ipcMain.handle('fly-current-user', async () => flyApi.currentUser());
+    ipcMain.handle('fly-spawn', async () => flyApi.spawnFly());
+    ipcMain.handle('fly-breed', async (_e, arg) => flyApi.breed(arg.a, arg.b));
+    ipcMain.handle('fly-submit-record', async (_e, arg) => flyApi.submitRecord(arg.timeMs));
+    ipcMain.handle('fly-submit-mutation', async (_e, arg) => flyApi.submitMutation(arg.flyId));
+    ipcMain.handle('fly-leaderboard', async () => flyApi.getLeaderboard());
+    ipcMain.handle('fly-add-point', async (_e, arg) => flyApi.addPoint(arg.n));
+    ipcMain.handle('fly-create-listing', async (_e, arg) => flyApi.createListing(arg.kind, arg.flyIds, arg.note, arg.want, arg.instar, arg.color));
+    ipcMain.handle('fly-list-listings', async () => flyApi.listListings());
+    ipcMain.handle('fly-unlist-listing', async (_e, arg) => flyApi.unlistListing(arg.id));
+    ipcMain.handle('fly-create-offer', async (_e, arg) => flyApi.createOffer(arg.listingId, arg.kind, arg.flyIds, arg.note, arg.color, arg.instar));
+    ipcMain.handle('fly-list-offers', async () => flyApi.listOffers());
+    ipcMain.handle('fly-accept-offer', async (_e, arg) => flyApi.acceptOffer(arg.id));
+    ipcMain.handle('fly-reject-offer', async (_e, arg) => flyApi.rejectOffer(arg.id));
+    ipcMain.handle('fly-claim-offer', async (_e, arg) => flyApi.claimOffer(arg.id));
+    ipcMain.handle('fly-get-points', async () => flyApi.getPoints());
 
     screen.on('display-removed', refitDesktop);
     screen.on('display-added', refitDesktop);

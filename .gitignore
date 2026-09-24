@@ -8,3 +8,8 @@ release/
 # 本机启动入口（指向本地 electron.exe / node_modules，不入库）
 *.lnk
 launch-*.cmd
+
+# 服务器端（含密码链规则，绝不进公开仓库）
+server/
+supabase/
+test-*.mjs

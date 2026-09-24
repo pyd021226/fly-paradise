@@ -1,6 +1,19 @@
 const $ = (id) => document.getElementById(id);
 const api = window.panel;
 
+let unlistingIds = new Set();
+let tipTimer = 0;
+function shopTip(text) {
+  const el = $('shopStatus');
+  if (!el) return;
+  el.textContent = text || '';
+  clearTimeout(tipTimer);
+  if (!text) return;
+  tipTimer = setTimeout(() => {
+    if (el.textContent === text) el.textContent = '';
+  }, 3000);
+}
+
 function fmtMs(ms) {
   const s = Math.max(0, Math.floor((ms || 0) / 1000));
   const h = Math.floor(s / 3600);
@@ -77,9 +90,9 @@ function render(s) {
   } else if (watch) {
     $('hint').textContent = '全图透视：果蝇盖在所有窗口上面。再点关掉。';
   } else if (lastLife.cleared && breed) {
-    $('hint').textContent = `通关！12 只全绿，用时 ${fmtMs(lastLife.breedMs)}。`;
+    $('hint').textContent = `通关！第一只绿，用时 ${fmtMs(lastLife.breedMs)}。`;
   } else if (breed) {
-    $('hint').textContent = '成虫最多 12，一窝 2–3 枚。12 只全绿通关。';
+    $('hint').textContent = '成虫最多 12，一窝 2–3 枚。第一只绿通关。';
   } else {
     $('hint').textContent = '苍蝇在桌面上。吃过的会交配产卵。拍子打活的，抹布擦残迹。';
   }
@@ -122,6 +135,12 @@ $('sexM').onchange = () => setSex($('sexM').checked ? 'm' : 'f');
 $('sexF').onchange = () => setSex($('sexF').checked ? 'f' : 'm');
 $('add').onclick = () => api.send('addFly', { sex });
 $('scare').onclick = () => api.send('scareAll');
+$('codon').onclick = () => {
+  const btn = $('codon');
+  btn.classList.toggle('on');
+  btn.textContent = btn.classList.contains('on') ? '隐藏基因码' : '显示基因码';
+  api.send('codon');
+};
 $('fast').onclick = () => api.send('fast');
 $('quit').onclick = () => api.send('quit');
 
@@ -134,19 +153,20 @@ addEventListener('keydown', (e) => {
 
 api.onState(render);
 if (api.onLife) {
-  let last = { eggs: 0, l1: 0, l2: 0, l3: 0, pupae: 0, adults: 0, green: 0, greenPeak: 0, rainbow: 0, breed: true, cleared: false, breedMs: 0 };
+  let last = { eggs: 0, l1: 0, l2: 0, l3: 0, pupae: 0, adults: 0, green: 0, greenPeak: 0, red: 0, mut: 0, breed: true, cleared: false, breedMs: 0 };
   api.onLife((s) => {
     last = { ...last, ...s };
     lastLife = last;
     const el = $('stats');
     if (!el) return;
     let line = `成虫 ${last.adults || 0}（${sexn(last.adultF, last.adultM)}）　卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}`;
-    line += `<span class="m">褐色（A_B_C_/A_B_cc） ${sexn(last.wildF, last.wildM)}</span>`;
-    line += `<span class="m">中褐（A_bbC_/A_bbcc） ${sexn(last.midF, last.midM)}</span>`;
-    line += `<span class="m">深褐（aaB_C_/aaB_cc） ${sexn(last.deepF, last.deepM)}</span>`;
-    line += `<span class="m">白色（aabbC_） ${sexn(last.whiteF, last.whiteM)}</span>`;
-    line += `<span class="m">绿色（aabbcc） ${sexn(last.greenF, last.greenM)}</span>`;
-    if (last.rainbow) line += `<span class="m">彩虹（aabbccxx） ${sexn(last.rainbowF, last.rainbowM)}</span>`;
+    line += `<span class="m">褐色 ${sexn(last.wildF, last.wildM)}</span>`;
+    line += `<span class="m">中褐 ${sexn(last.midF, last.midM)}</span>`;
+    line += `<span class="m">深褐 ${sexn(last.deepF, last.deepM)}</span>`;
+    line += `<span class="m">白色 ${sexn(last.whiteF, last.whiteM)}</span>`;
+    if (last.green) line += `<span class="m">绿色 ${sexn(last.greenF, last.greenM)}</span>`;
+    if (last.red) line += `<span class="m">红色 ${sexn(last.redF, last.redM)}</span>`;
+    if (last.mut) line += `<span class="m">更高突变 ${sexn(last.mutF, last.mutM)}</span>`;
     if (isAnnoy) line += `<span class="m">绿峰值 ${last.greenPeak || 0}</span>`;
     if (last.breed) {
       line += `<br>${last.cleared ? '通关' : '计时'} ${fmtMs(last.breedMs)}`;
@@ -159,7 +179,7 @@ if (api.onLife) {
     if (hint && last.cleared && last.breed && !document.body.classList.contains('gate') && !wash) {
       const sw = $('swatter');
       if (sw && !sw.classList.contains('on') && !$('rag').classList.contains('on')) {
-        hint.textContent = `通关！12 只全绿，用时 ${fmtMs(lastLife.breedMs)}。`;
+        hint.textContent = `通关！第一只绿，用时 ${fmtMs(lastLife.breedMs)}。`;
       }
     }
   });
@@ -171,21 +191,12 @@ const JAR_PAL = {
   deep: { thorax: '#4a2c12', thoraxDark: '#8a5a28', abdomen: '#6b4524', band: '#1a0e08', head: '#3a220e', leg: '#4a3218' },
   white: { thorax: '#f3eee4', thoraxDark: '#d8d0c4', abdomen: '#fffcf6', band: '#6b6358', head: '#efe8dc', leg: '#c4b8a8' },
   green: { thorax: '#1aa85a', thoraxDark: '#c8f080', abdomen: '#148a48', band: '#0d3a20', head: '#127a40', leg: '#1a5a32' },
-  rainbow: { thorax: '#e23d7a', thoraxDark: '#7a3dff', abdomen: '#3dd4e2', band: '#1a1030', head: '#f0c040', leg: '#6a4cff' },
+  red: { thorax: '#c0392b', thoraxDark: '#e08060', abdomen: '#96281b', band: '#3d0f08', head: '#8e2018', leg: '#6a201a' },
+  mut: { thorax: '#c8932a', thoraxDark: '#e0b048', abdomen: '#a3741d', band: '#3d2a08', head: '#8a6420', leg: '#6a4a1a' },
 };
 
 function jarMorph(u) {
-  const dark = (u.geneD || 0) >= 2;
-  const mid = (u.geneP || 0) >= 2;
-  const green = (u.geneG || 0) >= 2;
-  if (dark && mid && green) {
-    if ((u.geneX || 0) >= 2 && (u.geneY || 0) >= 2) return 'rainbow';
-    return 'green';
-  }
-  if (dark && mid) return 'white';
-  if (dark) return 'deep';
-  if (mid) return 'mid';
-  return 'wild';
+  return u.color || 'wild';
 }
 
 let jarState = { w: 180, h: 320, units: [], hint: '' };
@@ -385,14 +396,344 @@ function drawJar() {
 if (jarCv) {
   jarCv.onclick = null;
 }
+if ($('openShop')) $('openShop').onclick = () => api.send('openShop');
 if ($('jarAll')) $('jarAll').onclick = () => api.send('jarSelectAll');
 if ($('jarFree')) $('jarFree').onclick = () => api.send('jarFreeSel');
+if ($('jarSell')) $('jarSell').onclick = () => {
+  const note = ($('sellNote') && $('sellNote').value.trim()) || '';
+  if (!note) {
+    shopTip('请先备注再上架');
+    const inp = $('sellNote');
+    if (inp) inp.focus();
+    return;
+  }
+  api.send('jarSell', { note });
+};
 
 if (api.onBottle) {
   api.onBottle((d) => {
-    const msg = $('jarMsg');
-    if (msg) msg.textContent = (d && d.hint) || '';
+    const hint = (d && d.hint) || '';
+    if (hint.indexOf('先在瓶子') === 0 || hint === '该物品无法报价') {
+      shopTip(hint);
+      return;
+    }
+    if (hint === '已下架' || hint === '已下架回瓶') {
+      shopTip('已下架');
+      return;
+    }
+    if (hint === '已上架' || hint.indexOf('上架失败') === 0 || hint === '已报价' || hint.indexOf('报价失败') === 0) {
+      shopTip(hint);
+      if (hint === '已上架' || hint === '已报价') {
+        const inp = $('sellNote');
+        if (inp) inp.value = '';
+      }
+      loadShop();
+    }
   });
 }
+
+// 登录
+const LOGIN_EMAIL_KEY = 'fly-login-email';
+
+function showLogin(msg) {
+  document.body.classList.add('need-login');
+  if (msg) $('loginMsg').textContent = msg;
+}
+
+function showGame() {
+  document.body.classList.remove('need-login');
+  loadLeaderboard();
+  loadShop();
+  loadPoints();
+}
+
+async function loadPoints() {
+  if (!api.getPoints) return;
+  const el = $('points');
+  const res = await api.getPoints();
+  if (res && res.ok && el) {
+    el.textContent = '积分 ' + (res.data.amount || 0);
+  }
+}
+
+async function loadShop() {
+  if (!api.listListings) return;
+  const el = $('shop');
+  if (!el) return;
+  const res = await api.listListings();
+  if (!res || !res.ok) {
+    el.innerHTML = '<b>商店</b><span class="m">商店加载失败</span>';
+    return;
+  }
+  const listings = (res.data && res.data.listings) || [];
+  const name = (e) => (e || '').split('@')[0];
+  const kindName = { fly: '果蝇', egg: '卵', larva: '蛆', pupa: '蛹' };
+  const me = ($('loginEmail') && $('loginEmail').value.trim()) || '';
+  let offers = [];
+  try {
+    if (api.listOffers) {
+      const oRes = await api.listOffers();
+      if (oRes && oRes.ok) offers = (oRes.data && oRes.data.offers) || [];
+    }
+  } catch (e) {
+    offers = [];
+  }
+  for (const o of offers) {
+    if (o.status === 'accepted' && o.buyer_email === me && api.claimOffer) {
+      const listed = o.listings || {};
+      const ids = (Array.isArray(listed.fly_ids) && listed.fly_ids.length) ? listed.fly_ids : (listed.fly_id ? [listed.fly_id] : []);
+      if (ids.length) {
+        if (!captureOpen) {
+          captureOpen = true;
+          paintCapture();
+          api.send('capture', { open: true });
+        }
+        api.send('jarRestock', { items: ids.map((fid) => ({ kind: listed.kind || 'fly', serverId: fid, color: listed.color || 'wild', codon: '', instar: 1 })) });
+        shopTip('换到了东西，已进瓶子');
+      }
+      api.claimOffer(o.id);
+    }
+    if (o.status === 'rejected' && o.buyer_email === me && api.claimOffer) {
+      const ids = (Array.isArray(o.fly_ids) && o.fly_ids.length) ? o.fly_ids : (o.fly_id ? [o.fly_id] : []);
+      if (ids.length) {
+        if (!captureOpen) {
+          captureOpen = true;
+          paintCapture();
+          api.send('capture', { open: true });
+        }
+        api.send('jarRestock', { items: ids.map((fid) => ({ kind: o.kind || 'fly', serverId: fid, color: o.color || 'wild', codon: '', instar: 1 })) });
+        shopTip('报价被拒，东西已退回瓶子');
+      }
+      api.claimOffer(o.id);
+    }
+  }
+  const pendingByListing = {};
+  for (const o of offers) {
+    if (o.status !== 'pending') continue;
+    (pendingByListing[o.listing_id] || (pendingByListing[o.listing_id] = [])).push(o);
+  }
+  if (!listings.length) { el.innerHTML = '<b>商店</b><span class="m">暂无上架</span>'; return; }
+  el.innerHTML = '<b>商店</b><div class="shop-grid" id="shopGrid"></div>';
+  const grid = $('shopGrid');
+  for (const l of listings.slice(0, 12)) {
+    const card = document.createElement('div');
+    card.className = 'shop-card';
+    const cv = document.createElement('canvas');
+    cv.width = 72;
+    cv.height = 48;
+    const n = Math.max(1, Math.min(3, Number(l.quantity) || 1));
+    const qty = (l.kind === 'fly' || l.kind === 'pupa') ? 1 : n;
+    drawShopThumb(cv, l.kind, l.color, qty);
+    const cap = document.createElement('div');
+    cap.className = 'cap';
+    cap.textContent = l.note || kindName[l.kind] || l.kind;
+    const who = document.createElement('div');
+    who.className = 'who';
+    who.textContent = name(l.seller_email);
+    card.append(cv, cap, who);
+    const me = ($('loginEmail') && $('loginEmail').value.trim()) || '';
+    const mine = !!(l.mine || (me && l.seller_email === me));
+    if (mine) {
+      const off = document.createElement('button');
+      off.className = 'off';
+      off.type = 'button';
+      off.textContent = '下架';
+      off.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (unlistingIds.has(l.id)) return;
+        unlistingIds.add(l.id);
+        off.disabled = true;
+        try {
+          if (!api.unlistListing) throw new Error('请完全退出游戏再开');
+          const r = await api.unlistListing(l.id);
+          if (!(r && r.ok)) throw new Error((r && r.error) || '失败');
+          const ids = (Array.isArray(l.fly_ids) && l.fly_ids.length) ? l.fly_ids : (l.fly_id ? [l.fly_id] : []);
+          const items = ids.map((fid) => ({
+            kind: l.kind || 'fly',
+            serverId: fid,
+            color: l.color || 'wild',
+            codon: '',
+            instar: l.instar || 1,
+          }));
+          if (!captureOpen) {
+            captureOpen = true;
+            paintCapture();
+            api.send('capture', { open: true });
+          }
+          api.send('jarRestock', { items });
+          shopTip('已下架');
+          await loadShop();
+        } catch (err) {
+          unlistingIds.delete(l.id);
+          off.disabled = false;
+          shopTip('下架失败：' + ((err && err.message) || err));
+          await loadShop();
+        }
+      };
+      card.appendChild(off);
+      for (const o of pendingByListing[l.id] || []) {
+        const row = document.createElement('div');
+        row.className = 'who';
+        row.textContent = name(o.buyer_email) + ' 用' + (kindName[o.kind] || o.kind) + (o.note ? '·' + o.note : '') + '换';
+        card.appendChild(row);
+        const acc = document.createElement('button');
+        acc.className = 'off';
+        acc.type = 'button';
+        acc.textContent = '接受';
+        acc.onclick = async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const r = await api.acceptOffer(o.id);
+          if (!(r && r.ok)) { shopTip('接受失败：' + ((r && r.error) || '')); return; }
+          const ids = (Array.isArray(o.fly_ids) && o.fly_ids.length) ? o.fly_ids : (o.fly_id ? [o.fly_id] : []);
+          if (!captureOpen) {
+            captureOpen = true;
+            paintCapture();
+            api.send('capture', { open: true });
+          }
+          api.send('jarRestock', { items: ids.map((fid) => ({ kind: o.kind || 'fly', serverId: fid, color: o.color || 'wild', codon: '', instar: 1 })) });
+          shopTip('已交换，对方的东西进瓶子了');
+          loadShop();
+        };
+        const rej = document.createElement('button');
+        rej.className = 'off';
+        rej.type = 'button';
+        rej.textContent = '拒绝';
+        rej.onclick = async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const r = await api.rejectOffer(o.id);
+          if (!(r && r.ok)) { shopTip('拒绝失败'); return; }
+          shopTip('已拒绝');
+          loadShop();
+        };
+        card.appendChild(acc);
+        card.appendChild(rej);
+      }
+    }
+    const bid = document.createElement('button');
+    bid.className = 'off';
+    bid.type = 'button';
+    bid.textContent = '报价';
+    bid.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!captureOpen) {
+        captureOpen = true;
+        paintCapture();
+        api.send('capture', { open: true });
+      }
+      const note = ($('sellNote') && $('sellNote').value.trim()) || '';
+      shopTip('在瓶子里选中要拿来换的');
+      api.send('makeOffer', { listingId: l.id, note });
+    };
+    card.appendChild(bid);
+    grid.appendChild(card);
+  }
+}
+
+function drawShopThumb(cv, kind, color, qty) {
+  const ctx = cv.getContext('2d');
+  const w = cv.width;
+  const h = cv.height;
+  ctx.clearRect(0, 0, w, h);
+  const pal = JAR_PAL[color] || JAR_PAL.wild;
+  const n = Math.max(1, Math.min(3, qty || 1));
+  for (let i = 0; i < n; i++) {
+    const x = w / 2 + (i - (n - 1) / 2) * 20;
+    const y = h / 2 + 4;
+    ctx.save();
+    ctx.translate(x, y);
+    if (kind === 'egg') {
+      ctx.fillStyle = '#f4f1e8';
+      ctx.strokeStyle = 'rgba(180,170,150,0.7)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 7, 3.2, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (kind === 'larva') {
+      ctx.fillStyle = '#d9cbb0';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 11, 3.2, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (kind === 'pupa') {
+      ctx.fillStyle = '#caa060';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 10, 4.2, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.scale(1.15, 1.15);
+      ctx.fillStyle = pal.abdomen;
+      ctx.beginPath();
+      ctx.ellipse(0, 4, 3.2, 4.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = pal.thorax;
+      ctx.beginPath();
+      ctx.ellipse(0, 0.4, 3.4, 2.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = pal.head;
+      ctx.beginPath();
+      ctx.ellipse(0, -2.6, 1.8, 1.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#d44532';
+      ctx.beginPath();
+      ctx.ellipse(-1.4, -2.7, 1.1, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(1.4, -2.7, 1.1, 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+async function loadLeaderboard() {
+  if (!api.getLeaderboard) return;
+  const el = $('leaderboard');
+  const res = await api.getLeaderboard();
+  if (!res || !res.ok || !el) return;
+  const { records, mutations } = res.data || {};
+  const name = (e) => (e || '').split('@')[0];
+  let html = '<b>排行榜</b>';
+  if (records && records.length) {
+    html += '<span class="m">最快通关：' + records.slice(0, 10).map((r) => `${name(r.email)} ${fmtMs(r.time_ms)}`).join(' · ') + '</span>';
+  }
+  if (mutations && mutations.length) {
+    html += '<span class="m">最稀有突变：' + mutations.slice(0, 10).map((m) => `${name(m.email)} Lv.${m.level} ${(m.probability * 100).toFixed(3)}%`).join(' · ') + '</span>';
+  }
+  el.innerHTML = html;
+}
+
+async function tryLogin() {
+  const email = $('loginEmail').value.trim();
+  const password = $('loginPassword').value;
+  if (!email || !password) { $('loginMsg').textContent = '填邮箱和密码'; return; }
+  $('loginBtn').disabled = true;
+  $('loginMsg').textContent = '登录中…';
+  const res = await api.signIn(email, password);
+  $('loginBtn').disabled = false;
+  if (res && res.ok) {
+    showGame();
+    try { localStorage.setItem(LOGIN_EMAIL_KEY, email); } catch {}
+    api.send('logged-in');
+  } else {
+    $('loginMsg').textContent = (res && res.error) || '登录失败';
+  }
+}
+
+$('loginBtn').onclick = tryLogin;
+$('loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryLogin(); });
+
+(function initLogin() {
+  let saved = '';
+  try { saved = localStorage.getItem(LOGIN_EMAIL_KEY) || ''; } catch {}
+  if (saved) $('loginEmail').value = saved;
+  api.currentUser().then((u) => {
+    if (u && u.ok) { showGame(); api.send('logged-in'); }
+    else showLogin();
+  });
+})();
 
 api.ready();
