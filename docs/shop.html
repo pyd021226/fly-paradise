@@ -64,11 +64,12 @@
   const URL = "https://asfhegiiqhgaodpmqvlh.supabase.co";
   const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzZmhlZ2lpcWhnYW9kcG1xdmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNDU0MDAsImV4cCI6MjEwNTcyMTQwMH0._iFe4e77vDLX6vreQE8jci7az8_t1_U1sdnspmiALbQ";
   const KEY = "fly-shop-session";
-  const kindName = { fly: "果蝇", egg: "卵", larva: "幼虫", pupa: "幼虫", item: "道具" };
+  const kindName = { fly: "果蝇", egg: "卵", larva: "幼虫", pupa: "蛹", item: "道具" };
   const CATS = [
     { id: "all", label: "全部" },
     { id: "egg", label: "卵", kinds: ["egg"] },
-    { id: "larva", label: "幼虫", kinds: ["larva", "pupa"] },
+    { id: "larva", label: "幼虫", kinds: ["larva"] },
+    { id: "pupa", label: "蛹", kinds: ["pupa"] },
     { id: "fly", label: "果蝇", kinds: ["fly"] },
     { id: "item", label: "道具", kinds: ["item"] },
   ];
