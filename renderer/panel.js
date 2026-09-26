@@ -452,8 +452,9 @@ function showLogin(msg) {
   if (msg) $('loginMsg').textContent = msg;
 }
 
-function showGame() {
+function showGame(email) {
   document.body.classList.remove('need-login');
+  if ($('whoami')) $('whoami').textContent = email ? ('当前账号 ' + email) : '';
   loadLeaderboard();
   loadShop();
   loadPoints();
@@ -536,7 +537,7 @@ async function tryLogin() {
   const res = await api.signIn(email, password);
   $('loginBtn').disabled = false;
   if (res && res.ok) {
-    showGame();
+    showGame(email);
     try { localStorage.setItem(LOGIN_EMAIL_KEY, email); } catch {}
     api.send('logged-in');
   } else {
@@ -552,7 +553,7 @@ $('loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') t
   try { saved = localStorage.getItem(LOGIN_EMAIL_KEY) || ''; } catch {}
   if (saved) $('loginEmail').value = saved;
   api.currentUser().then((u) => {
-    if (u && u.ok) { showGame(); api.send('logged-in'); }
+    if (u && u.ok) { showGame(u.email); api.send('logged-in'); }
     else showLogin();
   });
 })();
