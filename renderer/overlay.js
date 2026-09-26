@@ -51,6 +51,30 @@ const JAR_DIE_MS = 2 * 60 * 1000;
 const JAR_W = 180;
 const JAR_H = 320;
 const CRUISE_SPD = 280;
+const WALK_SPD = 100;        // 地面爬行速度（px/s）——平时主要靠爬
+const WALK_MIN_MS = 2000;    // 一次爬行最短时长
+const WALK_MAX_MS = 6500;    // 一次爬行最长时长
+const FLIGHT_MIN_MS = 500;   // 一次飞行最短时长
+const FLIGHT_MAX_MS = 1600;  // 一次飞行最长时长
+const FLIGHT_CHANCE = 0.3;   // 爬行结束后起飞的概率
+const TOOL_CALM_SPD = 600;   // 工具移动低于此速度视为“缓慢靠近”，不惊动果蝇
+
+function walkMs() { return fast ? rand(500, 1500) : rand(WALK_MIN_MS, WALK_MAX_MS); }
+function flightMs() { return fast ? rand(300, 800) : rand(FLIGHT_MIN_MS, FLIGHT_MAX_MS); }
+
+// 平时以地面爬行为主，偶尔短暂起飞；逃跑与交配赶路另行处理
+function tickGait(fly, now) {
+  if (now < (fly.gaitUntil || 0)) return;
+  if (fly.airborne) {
+    fly.airborne = false;
+    fly.gaitUntil = now + walkMs();
+  } else if (Math.random() < FLIGHT_CHANCE) {
+    fly.airborne = true;
+    fly.gaitUntil = now + flightMs();
+  } else {
+    fly.gaitUntil = now + walkMs();
+  }
+}
 
 function mateMs() { return fast ? FAST_MS : MATE_MS; }
 function eggMs() { return fast ? FAST_MS : EGG_MS; }
@@ -296,7 +320,7 @@ function bodyPx(fly) {
 function senseRadius(fly) {
   const L = bodyPx(fly);
   const t = clamp(mouse.spd / 3200, 0, 1);
-  const flying = fly.state === 'fly' || fly.state === 'flee';
+  const flying = fly.state === 'flee' || (fly.state === 'fly' && !!fly.airborne);
   const minB = flying ? 20 : 4;
   const maxB = 30;
   return L * (minB + (maxB - minB) * t);
@@ -593,6 +617,8 @@ function spawnFly(x, y, opts = {}) {
     crawlTo: null,
     crawlT: 0,
     crawlDur: 0.3,
+    airborne: false,
+    gaitUntil: 0,
     fed: false,
     eatAcc: 0,
     mateId: 0,
@@ -904,6 +930,10 @@ function threat(fly, now) {
   if (now < (fly.settleUntil || 0)) return { p: 0, intensity: 0, dist };
   const r = senseRadius(fly);
   if (dist > r) return { p: 0, intensity: 0, dist };
+  // 拿着苍蝇拍/抹布缓慢移动时不惊扰，可以悄悄靠近瞄准
+  if ((swatterOn || ragOn) && (mouse.spd || 0) < TOOL_CALM_SPD) {
+    return { p: 0, intensity: 0, dist };
+  }
   const intensity = clamp(1 - dist / r, 0.4, 1);
   return { p: 1, intensity, dist };
 }
@@ -952,6 +982,8 @@ function scare(fly, now, intensity) {
     fly.mateCool = now + 8000;
   }
   fly.intensity = t;
+  fly.airborne = true;
+  fly.gaitUntil = now + flightMs();
   fly.fleeSpeed = 360 + t * 480;
   fly.scareUntil = now + (4000 + t * 12000);
   fly.settleUntil = 0;
@@ -1200,6 +1232,12 @@ function stepFly(fly, dt, now) {
   fly.hunger = Math.min(1, (fly.hunger || 0) + dt * 0.028);
   if (fly.state === 'eat') fly.hunger = Math.max(0, fly.hunger - dt * 0.3);
 
+  // 平时大部分时间爬行，小部分时间飞行（赶路/起飞瞬间除外）
+  if (fly.state === 'fly' && !fly.mateSeek && fly.mission !== 'meet'
+      && now >= (fly.takeoffUntil || 0)) {
+    tickGait(fly, now);
+  }
+
   if (fly.state === 'flee') {
     const rel = mouseRel(fly);
     const r = senseRadius(fly);
@@ -1335,6 +1373,8 @@ function stepFly(fly, dt, now) {
       fly.mission = fly.hunger > 0.45 ? 'food' : 'land';
       fly.target = pickIcon(fly.mission === 'food', fly, fly.perch.id) || randomIcon();
       fly.takeoffUntil = now + 400;
+      fly.airborne = true;
+      fly.gaitUntil = now + 400 + flightMs();
       fly.perch = null;
       return;
     }
@@ -1439,6 +1479,16 @@ function stepFly(fly, dt, now) {
       fly.vx *= b;
       fly.vy *= b;
     }
+    // 爬行时限制最高速度，让它慢慢爬
+    if (fly.state === 'fly' && !fly.airborne && !fly.mateSeek
+        && fly.mission !== 'meet' && now >= (fly.takeoffUntil || 0)) {
+      const spd = Math.hypot(fly.vx, fly.vy);
+      if (spd > WALK_SPD) {
+        const k = WALK_SPD / spd;
+        fly.vx *= k;
+        fly.vy *= k;
+      }
+    }
     fly.x += fly.vx * dt;
     fly.y += fly.vy * dt;
     wrapScreen(fly);
@@ -1453,74 +1503,6 @@ function stepFly(fly, dt, now) {
   }
 }
 
-function musicSrc(file) {
-  return new URL(`../assets/${file}`, location.href).href;
-}
-
-function makeAud(file) {
-  const a = new Audio(musicSrc(file));
-  a.preload = 'auto';
-  a.addEventListener('error', () => {
-    a.src = `file:///C:/Users/pyz/Desktop/${file}`;
-  }, { once: true });
-  return a;
-}
-
-const audSwatter = makeAud('拍子音乐.mp3');
-const audRag = makeAud('抹布音乐.mp3');
-const audKill = makeAud('击杀成虫音乐.mp3');
-const audRainbow = makeAud('彩色果蝇出现音乐.mp3');
-audSwatter.loop = true;
-audRag.loop = true;
-audKill.loop = false;
-audRainbow.loop = false;
-
-let killPlaying = false;
-let swatterResumeAt = 0;
-
-function stopAud(a) {
-  a.pause();
-  try { a.currentTime = 0; } catch { /* not ready */ }
-}
-
-function playLoop(a) {
-  a.loop = true;
-  try { a.currentTime = 0; } catch { /* */ }
-  a.play().catch(() => {});
-}
-
-function stopSwatterMusic() {
-  killPlaying = false;
-  stopAud(audKill);
-  stopAud(audSwatter);
-}
-
-function stopRagMusic() {
-  stopAud(audRag);
-}
-
-function playSwatterGrab() {
-  stopRagMusic();
-  stopAud(audKill);
-  killPlaying = false;
-  playLoop(audSwatter);
-}
-
-function playRagGrab() {
-  stopSwatterMusic();
-  playLoop(audRag);
-}
-
-function playKillMusic() {
-  if (!swatterOn) return;
-  if (!killPlaying) swatterResumeAt = audSwatter.currentTime || 0;
-  killPlaying = true;
-  audSwatter.pause();
-  stopAud(audRag);
-  try { audKill.currentTime = 0; } catch { /* */ }
-  audKill.play().catch(() => {});
-}
-
 function raiseFanfare(on) {
   if (on === fanfareRaised) return;
   fanfareRaised = on;
@@ -1532,8 +1514,6 @@ function playRainbowFanfare(now, force) {
   rainbowSeen = true;
   fanfareUntil = now + 8000;
   raiseFanfare(true);
-  try { audRainbow.currentTime = 0; } catch { /* */ }
-  audRainbow.play().catch(() => {});
 }
 
 function tickFanfare(now) {
@@ -1542,15 +1522,6 @@ function tickFanfare(now) {
     raiseFanfare(false);
   }
 }
-
-audKill.addEventListener('ended', () => {
-  if (!killPlaying) return;
-  killPlaying = false;
-  if (!swatterOn) return;
-  try { audSwatter.currentTime = swatterResumeAt; } catch { /* */ }
-  audSwatter.loop = true;
-  audSwatter.play().catch(() => {});
-});
 
 function flyCorpse(fly) {
   return {
@@ -1574,7 +1545,6 @@ function killFly(fly, now) {
   fly.state = 'dead';
   addSplat(fly.x, fly.y, now, fly.seed, 1);
   corpses.push(flyCorpse(fly));
-  playKillMusic();
   if (breed && window.fly && window.fly.addPoint) window.fly.addPoint(1);
 }
 
@@ -2166,7 +2136,7 @@ function drawBottle(now) {
       } else {
         drawFly({
           x: u.x, y: u.y, scale: (u.scale || 1) * 1.5, sex: u.sex,
-          visHead: u.heading, heading: u.heading, state: 'fly',
+          visHead: u.heading, heading: u.heading, state: 'fly', airborne: true,
           seed: u.seed, serverId: u.serverId, color: u.color || 'wild', codon: u.codon || '', crawling: false, mateRole: 0,
         }, now);
       }
@@ -2384,6 +2354,8 @@ function eclose(p, now) {
   f.vx = Math.cos(f.heading) * 320;
   f.vy = Math.sin(f.heading) * 320;
   f.takeoffUntil = now + 700;
+  f.airborne = true;
+  f.gaitUntil = now + 700 + flightMs();
   if (breed && f.serverId && window.fly && window.fly.submitMutation) {
     const shown = f.codon ? colorFromCodon(f.codon, '') : f.color;
     if (shown && /^(green|red|yellow)/.test(shown)) {
@@ -3251,7 +3223,7 @@ function drawOblique(flying, now, seed, grooms) {
 }
 
 function drawFly(fly, now) {
-  const flying = fly.state === 'fly' || fly.state === 'flee';
+  const flying = fly.state === 'flee' || (fly.state === 'fly' && !!fly.airborne);
   const grooms = !flying && !fly.crawling && fly.state !== 'mate';
   applyBody(fly, fly.sex === 'm', false, now);
   ctx.save();
@@ -3705,6 +3677,8 @@ function snapshot() {
     o.crawlFrom = null;
     o.crawlTo = null;
     o.crawling = false;
+    o.airborne = false;
+    o.gaitUntil = 0;
     o.eatingFood = 0;
     return o;
   };
@@ -3752,7 +3726,7 @@ function applyRestore(data) {
   breedMs = Number(data.breedMs) || 0;
   rainbowSeen = !!data.rainbowSeen;
   nextId = Number(data.nextId) || 1;
-  flies = (data.flies || []).map((f) => unpackTimes({ ...f, perch: null, target: null, crawling: false, eatingFood: 0 }, FLY_TS, now));
+  flies = (data.flies || []).map((f) => unpackTimes({ ...f, perch: null, target: null, crawling: false, airborne: false, gaitUntil: 0, eatingFood: 0 }, FLY_TS, now));
   eggs = (data.eggs || []).map((e) => unpackTimes({ ...e }, ['t'], now));
   larvae = (data.larvae || []).map((L) => unpackTimes({ ...L, eatingFood: 0 }, ['nextTurn'], now));
   pupae = (data.pupae || []).map((p) => unpackTimes({ ...p }, ['t'], now));
@@ -3929,25 +3903,19 @@ if (api) {
     syncBinFood();
   });
   api.onSwatter((d) => {
-    const was = swatterOn;
     swatterOn = !!d.on;
     rawMove = !!d.raw;
     document.documentElement.classList.toggle('swatter', swatterOn);
     if (swatterOn) ragOn = false;
     if (swatterOn) netOn = false;
-    if (swatterOn && !was) playSwatterGrab();
-    if (!swatterOn && was) stopSwatterMusic();
   });
   if (api.onRag) {
     api.onRag((d) => {
-      const was = ragOn;
       ragOn = !!d.on;
       rawMove = !!d.raw;
       document.documentElement.classList.toggle('rag', ragOn);
       if (ragOn) swatterOn = false;
       if (ragOn) netOn = false;
-      if (ragOn && !was) playRagGrab();
-      if (!ragOn && was) stopRagMusic();
     });
   }
   if (api.onNet) {
