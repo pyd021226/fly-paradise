@@ -678,6 +678,8 @@ if (!app.requestSingleInstanceLock()) {
         send('cmd', { name: 'codonShow' });
       } else if (name === 'logged-in') {
         send('cmd', { name: 'loggedIn' });
+      } else if (name === 'guest') {
+        send('cmd', { name: 'guest' });
       } else if (name === 'scareAll') {
         send('cmd', { name: 'scareAll' });
       } else if (name === 'pause') {
@@ -720,7 +722,7 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('fly-signout', async () => flyApi.signOut());
     ipcMain.handle('fly-current-user', async () => flyApi.currentUser());
     ipcMain.handle('fly-spawn', async () => flyApi.spawnFly());
-    ipcMain.handle('fly-breed', async (_e, arg) => flyApi.breed(arg.a, arg.b));
+    ipcMain.handle('fly-breed', async (_e, arg) => flyApi.breed(arg.a, arg.b, arg.appendFrom));
     ipcMain.handle('fly-submit-record', async (_e, arg) => flyApi.submitRecord(arg.timeMs));
     ipcMain.handle('fly-submit-mutation', async (_e, arg) => flyApi.submitMutation(arg.flyId));
     ipcMain.handle('fly-leaderboard', async () => flyApi.getLeaderboard());

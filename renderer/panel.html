@@ -148,6 +148,11 @@
     #game { display: block; }
     body.need-login #login { display: block; }
     body.need-login #game { display: none; }
+    body.guest #openShop,
+    body.guest #leaderboard,
+    body.guest #points,
+    body.guest #jarSell,
+    body.guest #sellNote { display: none; }
     #shop { padding: 10px 8px 12px; overflow: hidden; }
     .shop-grid {
       display: grid;
@@ -194,10 +199,11 @@
   <main>
     <div id="login">
       <h1>果蝇乐园</h1>
-      <p class="hint">登录后开始养果蝇。</p>
+      <p class="hint">登录后走服务器遗传（基因码、商店）。游客只能养本地野蝇。</p>
       <input id="loginEmail" type="email" placeholder="邮箱">
       <input id="loginPassword" type="password" placeholder="密码">
       <button class="primary" id="loginBtn" type="button">登录</button>
+      <button id="guestBtn" type="button">游客进入</button>
       <p class="hint" id="loginMsg"></p>
     </div>
     <div id="game">

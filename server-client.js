@@ -162,8 +162,8 @@ export async function spawnFly() {
   return r.ok ? { ok: true, fly: r.data } : r;
 }
 
-export async function breed(a, b) {
-  const r = await call('breed', { fly_a: a, fly_b: b });
+export async function breed(a, b, appendFrom) {
+  const r = await call('breed', { fly_a: a, fly_b: b, append_from: appendFrom || null });
   return r.ok ? { ok: true, fly: r.data } : r;
 }
 

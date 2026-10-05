@@ -614,7 +614,6 @@ function spawnFly(x, y, opts = {}) {
     color: opts.color || 'wild',
     codon: opts.codon || '',
   };
-  if (f.codon) f.color = colorFromCodon(f.codon, f.color);
   if (perched) {
     const p = clampToGlyph(perched, f.x + rand(-10, 10), f.y + rand(-8, 8));
     f.x = p.x;
@@ -1742,11 +1741,12 @@ async function layEggs(x, y, mom, dad, firstOf, clone) {
     let codon = '';
     if (!clone && mom && dad && mom.serverId && dad.serverId && window.fly && window.fly.breed) {
       try {
-        const res = await window.fly.breed(mom.serverId, dad.serverId);
+        const appendFrom = i === 0 ? dad.serverId : i === 1 ? mom.serverId : null;
+        const res = await window.fly.breed(mom.serverId, dad.serverId, appendFrom);
         if (res && res.ok && res.fly) {
           serverId = res.fly.id;
           codon = res.fly.codon || '';
-          color = codon ? colorFromCodon(codon, res.fly.color || 'wild') : (res.fly.color || 'wild');
+          color = res.fly.color || colorFromCodon(codon, 'wild');
         }
       } catch (e) { /* 网络失败，用本地 fallback */ }
     }
@@ -2888,7 +2888,7 @@ const PALETTE_DEAD = {
 };
 
 function applyBody(src, male, dead, now) {
-  const morph = src.codon ? colorFromCodon(src.codon, src.color || 'wild') : (src.color || 'wild');
+  const morph = src.color || 'wild';
   const p = (dead ? PALETTE_DEAD : PALETTE)[morph] || PALETTE.wild;
   COL.thorax = p.thorax;
   COL.thoraxDark = p.thoraxDark;
@@ -3627,7 +3627,7 @@ function publishLife() {
   let adultF = 0;
   let adultM = 0;
   for (const f of flies) {
-    const key = f.codon ? colorFromCodon(f.codon, f.color || 'wild') : (f.color || 'wild');
+    const key = f.color || 'wild';
     const slot = morphs[key] || morphs.wild;
     slot.n += 1;
     if (f.sex === 'f') {
@@ -4004,6 +4004,10 @@ if (api) {
     if (d.name === 'scareAll') scareAll(performance.now());
     if (d.name === 'codonShow') showCodons = !showCodons;
     if (d.name === 'loggedIn') spawnServerFlies();
+    if (d.name === 'guest') {
+      holdBoot = false;
+      if (!booted && icons.length) boot();
+    }
     if (d.name === 'boot') boot();
     if (d.name === 'startFresh') startFresh();
     if (d.name === 'restore' && d.data) applyRestore(d.data);

@@ -63,6 +63,9 @@ function render(s) {
   const autoStart = !!s.autoStart;
   const fast = !!s.fast;
   isAnnoy = !!s.annoy;
+  if (isAnnoy && !forceLogin && document.body.classList.contains('need-login')) {
+    enterGuest();
+  }
   document.body.classList.toggle('gate', gate);
   const btn = $('swatter');
   btn.textContent = on ? '收起苍蝇拍' : '拿出苍蝇拍';
@@ -144,6 +147,7 @@ $('codon').onclick = () => {
 $('fast').onclick = () => api.send('fast');
 $('logout').onclick = async () => {
   if (api.signOut) await api.signOut();
+  forceLogin = true;
   showLogin();
 };
 $('quit').onclick = () => api.send('quit');
@@ -446,14 +450,32 @@ if (api.onBottle) {
 
 // 登录
 const LOGIN_EMAIL_KEY = 'fly-login-email';
+let forceLogin = false;
 
 function showLogin(msg) {
+  if (isAnnoy && !forceLogin) {
+    enterGuest();
+    return;
+  }
+  forceLogin = false;
+  document.body.classList.remove('guest');
   document.body.classList.add('need-login');
+  if ($('logout')) $('logout').textContent = '退出登录';
   if (msg) $('loginMsg').textContent = msg;
+}
+
+function enterGuest() {
+  document.body.classList.remove('need-login');
+  document.body.classList.add('guest');
+  if ($('whoami')) $('whoami').textContent = '游客模式 · 本地野蝇，没有基因码和商店';
+  if ($('logout')) $('logout').textContent = '登录账号';
+  api.send('guest');
 }
 
 function showGame(email) {
   document.body.classList.remove('need-login');
+  document.body.classList.remove('guest');
+  if ($('logout')) $('logout').textContent = '退出登录';
   if ($('whoami')) $('whoami').textContent = email ? ('当前账号 ' + email) : '';
   loadLeaderboard();
   loadShop();
@@ -546,8 +568,10 @@ async function tryLogin() {
 }
 
 $('loginBtn').onclick = tryLogin;
+if ($('guestBtn')) $('guestBtn').onclick = enterGuest;
 $('loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryLogin(); });
 
+api.ready();
 (function initLogin() {
   let saved = '';
   try { saved = localStorage.getItem(LOGIN_EMAIL_KEY) || ''; } catch {}
@@ -557,5 +581,3 @@ $('loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') t
     else showLogin();
   });
 })();
-
-api.ready();
