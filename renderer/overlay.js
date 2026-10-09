@@ -613,6 +613,7 @@ function spawnFly(x, y, opts = {}) {
     serverId: opts.serverId || null,
     color: opts.color || 'wild',
     codon: opts.codon || '',
+    geno: opts.geno || '',
   };
   if (perched) {
     const p = clampToGlyph(perched, f.x + rand(-10, 10), f.y + rand(-8, 8));
@@ -846,7 +847,7 @@ async function spawnServerFlies() {
   holdBoot = false;
   for (let i = 0; i < got.length; i++) {
     const perch = i === 0 ? a : b;
-    const f = spawnFly(0, 0, { perch, sex: i === 0 ? 'm' : 'f', serverId: got[i].id, color: got[i].color, codon: got[i].codon || '' });
+    const f = spawnFly(0, 0, { perch, sex: i === 0 ? 'm' : 'f', serverId: got[i].id, color: got[i].color, codon: got[i].codon || '', geno: got[i].geno || '' });
     if (f) f.needMeal = false;
   }
   spawnFood();
@@ -859,7 +860,7 @@ async function addServerFly(sex) {
     try {
       const res = await window.fly.spawnFly();
       if (res && res.ok && res.fly) {
-        const f = spawnFly(W * 0.5, H * 0.4, { sex, serverId: res.fly.id, color: res.fly.color, codon: res.fly.codon || '' });
+        const f = spawnFly(W * 0.5, H * 0.4, { sex, serverId: res.fly.id, color: res.fly.color, codon: res.fly.codon || '', geno: res.fly.geno || '' });
         if (f) { f.needMeal = true; return; }
       }
     } catch (e) { /* 失败走本地 fallback */ }
@@ -1739,6 +1740,7 @@ async function layEggs(x, y, mom, dad, firstOf, clone) {
     let serverId = null;
     let color = (mom && mom.color) || 'wild';
     let codon = '';
+    let geno = '';
     if (!clone && mom && dad && mom.serverId && dad.serverId && window.fly && window.fly.breed) {
       try {
         const appendFrom = i === 0 ? dad.serverId : i === 1 ? mom.serverId : null;
@@ -1746,6 +1748,7 @@ async function layEggs(x, y, mom, dad, firstOf, clone) {
         if (res && res.ok && res.fly) {
           serverId = res.fly.id;
           codon = res.fly.codon || '';
+          geno = res.fly.geno || '';
           color = res.fly.color || colorFromCodon(codon, 'wild');
         }
       } catch (e) { /* 网络失败，用本地 fallback */ }
@@ -1759,6 +1762,7 @@ async function layEggs(x, y, mom, dad, firstOf, clone) {
       serverId,
       color,
       codon,
+      geno,
       sex: sexes[i],
       firstOf: from,
     });
@@ -2266,6 +2270,7 @@ function hatchEgg(e, now) {
     serverId: e.serverId,
     color: e.color || 'wild',
     codon: e.codon || '',
+    geno: e.geno || '',
     sex: e.sex,
     firstOf: e.firstOf || null,
   });
@@ -2367,13 +2372,14 @@ function pupate(L, now) {
     serverId: L.serverId,
     color: L.color || 'wild',
     codon: L.codon || '',
+    geno: L.geno || '',
     sex: L.sex,
     firstOf: L.firstOf || null,
   });
 }
 
 function eclose(p, now) {
-  const f = spawnFly(p.x, p.y, { serverId: p.serverId, color: p.color, codon: p.codon, sex: p.sex });
+  const f = spawnFly(p.x, p.y, { serverId: p.serverId, color: p.color, codon: p.codon, geno: p.geno, sex: p.sex });
   if (!f) return false;
   shells.push({ x: p.x, y: p.y, rot: p.rot, seed: p.seed });
   f.needMeal = true;
@@ -3525,7 +3531,7 @@ function drawCodons() {
   ctx.lineWidth = 3;
   for (const f of flies) {
     if (f.state === 'dead') continue;
-    const label = f.codon || f.color || '?';
+    const label = [f.codon || f.color || '?', f.geno].filter(Boolean).join(' ');
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
     ctx.strokeText(label, f.x, f.y - 12);
     ctx.fillStyle = 'rgba(0,0,0,0.8)';
