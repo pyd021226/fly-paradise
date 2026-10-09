@@ -3523,6 +3523,16 @@ function drawSwatter() {
   ctx.restore();
 }
 
+function flyGeno(f) {
+  if (f && f.geno) return f.geno;
+  const c = f && f.color;
+  if (c === 'white') return 'AABB';
+  if (c === 'deep') return 'AABb';
+  if (c === 'mid') return 'AaBB';
+  if (c === 'wild') return 'AaBb';
+  return '';
+}
+
 function drawCodons() {
   ctx.save();
   ctx.font = '11px "Consolas", monospace';
@@ -3531,11 +3541,19 @@ function drawCodons() {
   ctx.lineWidth = 3;
   for (const f of flies) {
     if (f.state === 'dead') continue;
-    const label = [f.codon || f.color || '?', f.geno].filter(Boolean).join(' ');
+    const code = f.codon || '';
+    const geno = flyGeno(f);
+    const lines = [];
+    if (code) lines.push(code);
+    if (geno) lines.push(geno);
+    if (!lines.length) lines.push(f.color || '?');
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.strokeText(label, f.x, f.y - 12);
     ctx.fillStyle = 'rgba(0,0,0,0.8)';
-    ctx.fillText(label, f.x, f.y - 12);
+    for (let i = 0; i < lines.length; i++) {
+      const y = f.y - 12 - (lines.length - 1 - i) * 12;
+      ctx.strokeText(lines[i], f.x, y);
+      ctx.fillText(lines[i], f.x, y);
+    }
   }
   ctx.restore();
 }
