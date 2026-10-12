@@ -404,6 +404,41 @@ function punchOpenFolders() {
   ctx.restore();
 }
 
+function publishNestPeek() {
+  if (!window.fly || !window.fly.sendNestPeek) return;
+  let pick = null;
+  for (const w of explorers) {
+    const key = explorerNestKey(w);
+    if (!key || w.w < 80 || w.h < 80) continue;
+    const units = [];
+    const take = (list, kind) => {
+      for (const u of list) {
+        if (u.nestKey !== key) continue;
+        units.push({
+          kind,
+          x: (u.x || 0) - w.x,
+          y: (u.y || 0) - w.y,
+          rot: u.rot || 0,
+          heading: u.heading || 0,
+          instar: u.instar || 1,
+          color: u.color || 'wild',
+        });
+      }
+    };
+    take(eggs, 'egg');
+    take(larvae, 'larva');
+    take(pupae, 'pupa');
+    take(shells, 'shell');
+    take(foods, 'food');
+    take(corpses, 'corpse');
+    if (units.length) {
+      pick = { on: true, x: w.x, y: w.y, w: w.w, h: w.h, units };
+      break;
+    }
+  }
+  window.fly.sendNestPeek(pick || { on: false });
+}
+
 function nestIcon(key) {
   if (!key) return null;
   if (key === ':bin') return icons.find((ic) => ic.binIcon || ic.recycleBin) || null;
@@ -3903,6 +3938,7 @@ function draw(now) {
   if (netOn || netSolidUntil) drawNet(now);
   drawBottle(now);
   drawFanfare(now);
+  publishNestPeek();
 }
 
 function drawFanfare(now) {

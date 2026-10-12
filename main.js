@@ -42,6 +42,7 @@ let autoStart = isAnnoy;
 let overlay = null;
 let panel = null;
 let simWin = null;
+let nestPeekWin = null;
 let swatterOn = false;
 let ragOn = false;
 let netOn = false;
@@ -49,7 +50,6 @@ let captureOpen = false;
 let paused = false;
 let fast = false;
 let watch = false;
-let nestPeek = false;
 let mouseTimer = null;
 let iconTimer = null;
 let explorerTimer = null;
@@ -164,7 +164,7 @@ function applyLayer() {
   if (!overlay || overlay.isDestroyed()) return;
   glueOverlay();
   send('cmd', { name: 'watch', value: watch });
-  if (watch || nestPeek) {
+  if (watch) {
     overlay.setAlwaysOnTop(true, 'screen-saver');
     overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   } else {
@@ -515,26 +515,73 @@ function explorerIsNest(title) {
   return !!desktopFolderPath(t);
 }
 
+function hideNestPeek() {
+  if (nestPeekWin && !nestPeekWin.isDestroyed()) nestPeekWin.hide();
+}
+
+function showNestPeek(data) {
+  if (!overlay || overlay.isDestroyed() || !data || !data.on) {
+    hideNestPeek();
+    return;
+  }
+  const b = overlay.getBounds();
+  const bounds = {
+    x: Math.round(b.x + (Number(data.x) || 0)),
+    y: Math.round(b.y + (Number(data.y) || 0)),
+    width: Math.max(80, Math.round(Number(data.w) || 0)),
+    height: Math.max(80, Math.round(Number(data.h) || 0)),
+  };
+  if (!nestPeekWin || nestPeekWin.isDestroyed()) {
+    nestPeekWin = new BrowserWindow({
+      ...bounds,
+      frame: false,
+      transparent: true,
+      skipTaskbar: true,
+      focusable: false,
+      hasShadow: false,
+      resizable: false,
+      maximizable: false,
+      minimizable: false,
+      fullscreenable: false,
+      backgroundColor: '#00000000',
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: path.join(HERE, 'preload-nest.mjs'),
+        sandbox: false,
+      },
+    });
+    nestPeekWin.setMenu(null);
+    nestPeekWin.setAlwaysOnTop(true, 'screen-saver');
+    nestPeekWin.setIgnoreMouseEvents(true, { forward: true });
+    nestPeekWin.loadFile(path.join(HERE, 'renderer', 'nest-peek.html'));
+    nestPeekWin.on('closed', () => { nestPeekWin = null; });
+    nestPeekWin.webContents.once('did-finish-load', () => {
+      if (nestPeekWin && !nestPeekWin.isDestroyed()) nestPeekWin.webContents.send('nest-draw', data);
+    });
+    return;
+  }
+  const cur = nestPeekWin.getBounds();
+  if (cur.x !== bounds.x || cur.y !== bounds.y || cur.width !== bounds.width || cur.height !== bounds.height) {
+    nestPeekWin.setBounds(bounds);
+  }
+  if (!nestPeekWin.isVisible()) nestPeekWin.showInactive();
+  nestPeekWin.webContents.send('nest-draw', data);
+}
+
 function publishExplorers() {
   if (!overlay || overlay.isDestroyed()) return;
   const list = listFolderWindows();
-  const windows = toOverlayIcons(list.map((w, i) => ({
-    id: 'ex:' + i + ':' + w.title,
-    name: w.title,
-    title: w.title,
-    x: w.x,
-    y: w.y,
-    w: w.w,
-    h: w.h,
-  })), true);
-  const peek = windows.some((w) => explorerIsNest(w.title || w.name));
-  if (peek !== nestPeek) {
-    nestPeek = peek;
-    applyLayer();
-  } else {
-    nestPeek = peek;
-  }
-  send('explorers', { windows });
+  send('explorers', {
+    windows: toOverlayIcons(list.map((w, i) => ({
+      id: 'ex:' + i + ':' + w.title,
+      name: w.title,
+      title: w.title,
+      x: w.x,
+      y: w.y,
+      w: w.w,
+      h: w.h,
+    })), true),
+  });
 }
 
 function publishIcons() {
@@ -693,6 +740,7 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('snapshot', (_e, data) => {
       if (data && data.breed) writeSave(data);
     });
+    ipcMain.on('nest-peek', (_e, data) => showNestPeek(data));
 
     ipcMain.on('fanfare', (_e, on) => {
       if (!overlay || overlay.isDestroyed()) return;
@@ -858,6 +906,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   app.isQuitting = true;
   if (overlay && !overlay.isDestroyed()) stopRawMouse(overlay);
+  hideNestPeek();
   globalShortcut.unregisterAll();
   clearInterval(mouseTimer);
   clearInterval(iconTimer);

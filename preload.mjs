@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('fly', {
   putAway: () => ipcRenderer.send('swatter-off'),
   sendLife: (s) => ipcRenderer.send('life-stats', s),
   sendSnapshot: (s) => ipcRenderer.send('snapshot', s),
+  sendNestPeek: (s) => ipcRenderer.send('nest-peek', s),
   fanfare: (on) => ipcRenderer.send('fanfare', !!on),
   signIn: (email, password) => ipcRenderer.invoke('fly-signin', { email, password }),
   signOut: () => ipcRenderer.invoke('fly-signout'),
