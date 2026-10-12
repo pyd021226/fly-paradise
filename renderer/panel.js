@@ -139,6 +139,14 @@ $('sexM').onchange = () => setSex($('sexM').checked ? 'm' : 'f');
 $('sexF').onchange = () => setSex($('sexF').checked ? 'f' : 'm');
 $('add').onclick = () => api.send('addFly', { sex });
 $('scare').onclick = () => api.send('scareAll');
+if ($('codon')) {
+  $('codon').onclick = () => {
+    const btn = $('codon');
+    btn.classList.toggle('on');
+    btn.textContent = btn.classList.contains('on') ? '隐藏基因码' : '显示基因码';
+    api.send('codon');
+  };
+}
 if ($('openSim')) $('openSim').onclick = () => api.send('openSim');
 $('fast').onclick = () => api.send('fast');
 $('logout').onclick = async () => {
@@ -463,9 +471,12 @@ function showLogin(msg) {
 function enterGuest() {
   document.body.classList.remove('need-login');
   document.body.classList.add('guest');
-  if ($('whoami')) $('whoami').textContent = '游客模式 · 本地野蝇，没有基因码和商店';
+  if ($('whoami')) $('whoami').textContent = '游客模式';
   if ($('logout')) $('logout').textContent = '登录账号';
   api.send('guest');
+  loadShop();
+  loadLeaderboard();
+  loadPoints();
 }
 
 function showGame(email) {

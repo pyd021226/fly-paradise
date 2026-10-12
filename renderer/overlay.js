@@ -1,4 +1,5 @@
 import { colorFromCodon } from '../src/codon-color.mjs';
+import { simulateClutch } from '../src/sim-engine.mjs';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -820,7 +821,10 @@ function spawnFly(x, y, opts = {}) {
     sex: opts.sex || (Math.random() < 0.5 ? 'm' : 'f'),
     serverId: opts.serverId || null,
     color: opts.color || 'wild',
-    codon: opts.codon || '',
+    codon: opts.codon || '1',
+    gene_d: opts.gene_d == null ? 1 : opts.gene_d,
+    gene_p: opts.gene_p == null ? 1 : opts.gene_p,
+    blood: opts.blood || {},
     geno: opts.geno || '',
   };
   if (perched) {
@@ -1947,22 +1951,41 @@ async function layEggs(x, y, mom, dad, firstOf, clone) {
   const host = iconAt(x, y) || currentCell(x, y);
   const key = nestKeyOf(host);
   const bury = !!(key && Math.random() < 0.5);
+  const useServer = !clone && !!(mom && dad && mom.serverId && dad.serverId && window.fly && window.fly.breed);
+  let localEggs = null;
+  if (!useServer && !clone && mom && dad) {
+    localEggs = simulateClutch(
+      { fly_id: 'a', gene_d: mom.gene_d ?? 1, gene_p: mom.gene_p ?? 1, codon: mom.codon || '1', blood: mom.blood || {} },
+      { fly_id: 'b', gene_d: dad.gene_d ?? 1, gene_p: dad.gene_p ?? 1, codon: dad.codon || '1', blood: dad.blood || {} },
+      n,
+    );
+  }
   for (let i = 0; i < n; i++) {
     let serverId = null;
     let color = (mom && mom.color) || 'wild';
-    let codon = '';
+    let codon = (mom && mom.codon) || '1';
+    let gene_d = mom && mom.gene_d != null ? mom.gene_d : 1;
+    let gene_p = mom && mom.gene_p != null ? mom.gene_p : 1;
+    let blood = (mom && mom.blood) || {};
     let geno = '';
-    if (!clone && mom && dad && mom.serverId && dad.serverId && window.fly && window.fly.breed) {
+    if (useServer) {
       try {
         const appendFrom = i === 0 ? dad.serverId : i === 1 ? mom.serverId : null;
         const res = await window.fly.breed(mom.serverId, dad.serverId, appendFrom);
         if (res && res.ok && res.fly) {
           serverId = res.fly.id;
-          codon = res.fly.codon || '';
+          codon = res.fly.codon || codon;
           geno = res.fly.geno || '';
           color = res.fly.color || colorFromCodon(codon, 'wild');
         }
       } catch (e) { /* 网络失败，用本地 fallback */ }
+    } else if (localEggs && localEggs[i]) {
+      const e = localEggs[i];
+      codon = e.codon;
+      color = e.color || color;
+      gene_d = e.geneD;
+      gene_p = e.geneP;
+      blood = e.bloodOut || {};
     }
     eggs.push({
       x: bury ? 0 : x + rand(-12, 12),
@@ -1977,6 +2000,9 @@ async function layEggs(x, y, mom, dad, firstOf, clone) {
       color,
       codon,
       geno,
+      gene_d,
+      gene_p,
+      blood,
       sex: sexes[i],
       firstOf: from,
     });
@@ -2489,6 +2515,9 @@ function hatchEgg(e, now) {
     color: e.color || 'wild',
     codon: e.codon || '',
     geno: e.geno || '',
+    gene_d: e.gene_d,
+    gene_p: e.gene_p,
+    blood: e.blood,
     sex: e.sex,
     firstOf: e.firstOf || null,
   });
@@ -2595,6 +2624,9 @@ function pupate(L, now) {
     color: L.color || 'wild',
     codon: L.codon || '',
     geno: L.geno || '',
+    gene_d: L.gene_d,
+    gene_p: L.gene_p,
+    blood: L.blood,
     sex: L.sex,
     firstOf: L.firstOf || null,
   });
@@ -2609,7 +2641,16 @@ function eclose(p, now) {
     x = c.x;
     y = c.y;
   }
-  const f = spawnFly(x, y, { serverId: p.serverId, color: p.color, codon: p.codon, geno: p.geno, sex: p.sex });
+  const f = spawnFly(x, y, {
+    serverId: p.serverId,
+    color: p.color,
+    codon: p.codon || '1',
+    geno: p.geno,
+    gene_d: p.gene_d,
+    gene_p: p.gene_p,
+    blood: p.blood,
+    sex: p.sex,
+  });
   if (!f) return false;
   shells.push({
     x: p.x,
@@ -3799,21 +3840,14 @@ function drawCodons() {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
   ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.fillStyle = 'rgba(0,0,0,0.8)';
   for (const f of flies) {
     if (f.state === 'dead') continue;
     const code = f.codon || '';
-    const geno = flyGeno(f);
-    const lines = [];
-    if (code) lines.push(code);
-    if (geno) lines.push(geno);
-    if (!lines.length) lines.push(f.color || '?');
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.fillStyle = 'rgba(0,0,0,0.8)';
-    for (let i = 0; i < lines.length; i++) {
-      const y = f.y - 12 - (lines.length - 1 - i) * 12;
-      ctx.strokeText(lines[i], f.x, y);
-      ctx.fillText(lines[i], f.x, y);
-    }
+    if (!code) continue;
+    ctx.strokeText(code, f.x, f.y - 12);
+    ctx.fillText(code, f.x, f.y - 12);
   }
   ctx.restore();
 }
@@ -3834,6 +3868,7 @@ function draw(now) {
   for (const s of splats) drawSplat(s);
   for (const c of corpses) if (!nestHidden(c)) drawCorpse(c);
   for (const f of flies) drawFly(f, now);
+  if (showCodons) drawCodons();
   if (swatterOn) drawSwatter();
   if (ragOn) {
     drawRag();

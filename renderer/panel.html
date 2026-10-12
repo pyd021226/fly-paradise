@@ -148,11 +148,6 @@
     #game { display: block; }
     body.need-login #login { display: block; }
     body.need-login #game { display: none; }
-    body.guest #openShop,
-    body.guest #leaderboard,
-    body.guest #points,
-    body.guest #jarSell,
-    body.guest #sellNote { display: none; }
     body.annoy #openSim { display: none; }
     #shop { padding: 10px 8px 12px; overflow: hidden; }
     .shop-grid {
@@ -200,7 +195,7 @@
   <main>
     <div id="login">
       <h1>果蝇乐园</h1>
-      <p class="hint">登录后走服务器遗传（基因码、商店）。游客只能养本地野蝇。</p>
+      <p class="hint">登录或游客进入。</p>
       <input id="loginEmail" type="email" placeholder="邮箱">
       <input id="loginPassword" type="password" placeholder="密码">
       <button class="primary" id="loginBtn" type="button">登录</button>
@@ -239,6 +234,7 @@
       <label><input id="sexM" type="checkbox" checked>雄</label>
     </div>
     <button id="scare" type="button">吓它们</button>
+    <button id="codon" type="button">显示基因码</button>
     <button id="openSim" type="button">配种推演</button>
     <button id="fast" type="button">快进</button>
     <p class="note" id="whoami"></p>
