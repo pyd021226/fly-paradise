@@ -66,6 +66,7 @@ function render(s) {
   if (isAnnoy && !forceLogin && document.body.classList.contains('need-login')) {
     enterGuest();
   }
+  document.body.classList.toggle('annoy', isAnnoy);
   document.body.classList.toggle('gate', gate);
   const btn = $('swatter');
   btn.textContent = on ? '收起苍蝇拍' : '拿出苍蝇拍';
@@ -144,6 +145,7 @@ $('codon').onclick = () => {
   btn.textContent = btn.classList.contains('on') ? '隐藏基因码' : '显示基因码';
   api.send('codon');
 };
+if ($('openSim')) $('openSim').onclick = () => api.send('openSim');
 $('fast').onclick = () => api.send('fast');
 $('logout').onclick = async () => {
   if (api.signOut) await api.signOut();

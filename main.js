@@ -12,6 +12,7 @@ import { fetchIconRects } from './src/icon-rects.js';
 import { startRawMouse, stopRawMouse } from './src/raw-mouse.js';
 import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs } from './src/desktop-layer.js';
 import * as flyApi from './server-client.js';
+import { asBlood, simulateClutch, whiteChance } from './src/sim-engine.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(HERE, 'assets', 'tray.png');
@@ -39,6 +40,7 @@ let autoStart = isAnnoy;
 
 let overlay = null;
 let panel = null;
+let simWin = null;
 let swatterOn = false;
 let ragOn = false;
 let netOn = false;
@@ -277,6 +279,47 @@ function createPanel() {
   });
   win.webContents.on('did-finish-load', publishState);
   return win;
+}
+
+function parentFromSim(raw, side) {
+  const r = raw || {};
+  return {
+    fly_id: side,
+    gene_d: r.gene_d == null || r.gene_d === '' ? 1 : Number(r.gene_d),
+    gene_p: r.gene_p == null || r.gene_p === '' ? 1 : Number(r.gene_p),
+    codon: String(r.codon || '').trim(),
+    blood: asBlood(r.blood),
+  };
+}
+
+function openSim() {
+  if (isAnnoy) return;
+  if (simWin && !simWin.isDestroyed()) {
+    simWin.show();
+    simWin.focus();
+    return;
+  }
+  const win = new BrowserWindow({
+    width: 920,
+    height: 720,
+    minWidth: 560,
+    minHeight: 420,
+    resizable: true,
+    autoHideMenuBar: true,
+    title: '配种推演',
+    icon: ICON,
+    backgroundColor: '#f4f1ea',
+    webPreferences: {
+      preload: path.join(HERE, 'preload-panel.mjs'),
+      sandbox: false,
+    },
+  });
+  win.setMenu(null);
+  win.loadFile(path.join(HERE, 'renderer', 'sim.html'));
+  win.on('closed', () => {
+    if (simWin === win) simWin = null;
+  });
+  simWin = win;
 }
 
 function overlayScreens() {
@@ -674,6 +717,8 @@ if (!app.requestSingleInstanceLock()) {
         putAwaySwatter();
       } else if (name === 'addFly') {
         send('cmd', { name: 'addFly', morph: msg.morph, sex: msg.sex });
+      } else if (name === 'openSim') {
+        openSim();
       } else if (name === 'codon') {
         send('cmd', { name: 'codonShow' });
       } else if (name === 'logged-in') {
@@ -736,6 +781,17 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('fly-reject-offer', async (_e, arg) => flyApi.rejectOffer(arg.id));
     ipcMain.handle('fly-claim-offer', async (_e, arg) => flyApi.claimOffer(arg.id));
     ipcMain.handle('fly-get-points', async () => flyApi.getPoints());
+    ipcMain.handle('fly-simulate-clutch', async (_e, arg) => {
+      try {
+        const a = parentFromSim(arg && arg.a, 'a');
+        const b = parentFromSim(arg && arg.b, 'b');
+        const n = Number(arg && arg.n) || 3;
+        const eggs = simulateClutch(a, b, n);
+        return { ok: true, data: { eggs, whiteChance: whiteChance(a, b) } };
+      } catch (e) {
+        return { ok: false, error: (e && e.message) || '推演失败' };
+      }
+    });
 
     screen.on('display-removed', refitDesktop);
     screen.on('display-added', refitDesktop);

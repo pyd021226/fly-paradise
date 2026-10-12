@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>配种推演</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --ink: #1f1b16;
+      --muted: #6f675c;
+      --line: #ddd4c6;
+      --card: #fffcf6;
+      --green: #178a4e;
+      --red: #b2402a;
+      --yellow: #a3741d;
+      --pick: #2a241c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.45 "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      padding: 20px 16px 56px;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; align-items: center; }
+    button {
+      font: inherit;
+      font-weight: 600;
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 14px;
+      background: #2a241c;
+      color: #fff;
+      cursor: pointer;
+    }
+    button.ghost { background: #fff; color: var(--ink); border: 1px solid var(--line); font-weight: 500; }
+    button:disabled { opacity: 0.45; cursor: default; }
+    .hint { font-size: 12px; color: var(--muted); }
+    .err { color: var(--red); min-height: 1.2em; }
+    .field {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+      gap: 8px;
+    }
+    .fly {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      cursor: pointer;
+      text-align: left;
+    }
+    .fly.on { border-color: var(--pick); box-shadow: 0 0 0 2px var(--pick); }
+    .fly.new { outline: 2px dashed #c9a227; }
+    .codon { font-family: Consolas, "IBM Plex Mono", monospace; font-weight: 700; letter-spacing: 0.06em; font-size: 22px; color: var(--ink); margin: 4px 0; }
+    .codon .lab { font-size: 12px; font-weight: 500; font-family: inherit; letter-spacing: 0; color: var(--muted); margin-right: 8px; }
+    .face {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 999px;
+      margin-left: 6px;
+    }
+    .face.green, .face.green2 { background: #e3f2e9; color: var(--green); }
+    .face.red, .face.red2 { background: #f6e5e0; color: var(--red); }
+    .face.yellow, .face.yellow2 { background: #f4ecd9; color: var(--yellow); }
+    .face.wild, .face.mid, .face.deep, .face.white { background: #ece8e0; color: #5a5044; }
+    .fly .sex { font-size: 13px; color: var(--muted); margin-bottom: 2px; }
+    .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .log { margin-top: 18px; }
+    .log .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>配种推演</h1>
+  <p class="sub">测试期全露出。开局一公一母，基因码 <b>1</b>。只能异性配。一窝 3 枚：前两枚末位跟父母体色（褐1 中褐2 深褐3 白4），第三枚 1–4 随机。前置位锁死。血账、借脸、充能都写在日志里。这是本机新规则；登录后桌面上真下崽仍走旧云函数，对不上是已知的。</p>
+  <div class="row">
+    <button type="button" id="breed" disabled>这两只下崽</button>
+    <button class="ghost" type="button" id="rand">随机两只下崽</button>
+    <button class="ghost" type="button" id="reset">清场重来</button>
+    <span class="hint" id="pickHint">还没选</span>
+  </div>
+  <p class="err" id="err"></p>
+  <div class="field" id="field"></div>
+  <div class="log" id="log"></div>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const api = window.panel;
+  const NAMES = { green: "绿", green2: "绿亮", red: "红", red2: "红亮", yellow: "黄", yellow2: "黄亮", wild: "褐", mid: "中褐", deep: "深褐", white: "白" };
+  const FAM_NAME = { "1124": "绿", "1123": "红", "1122": "黄" };
+  const KEY = "fly-sim-field-v4";
+  let flies = [];
+  let selected = [];
+  let nextId = 1;
+  let lastBorn = [];
+
+  function bodyTrait(d, p) {
+    function pair(n, dom, rec) {
+      if (n >= 2) return dom + dom;
+      if (n <= 0) return rec + rec;
+      return dom + rec;
+    }
+    return pair(d, "A", "a") + pair(p, "B", "b");
+  }
+  function formatBlood(blood) {
+    const parts = [];
+    const obj = blood || {};
+    for (const fam of Object.keys(FAM_NAME)) {
+      const s = obj[fam];
+      if (!s || (s.n <= 0 && s.charge <= 0)) continue;
+      parts.push(FAM_NAME[fam] + s.n + (s.charge ? "充" + s.charge : ""));
+    }
+    return parts.length ? parts.join(" ") : "空";
+  }
+  function starter(name, sex) {
+    return {
+      id: "f" + nextId++,
+      name,
+      sex,
+      codon: "1",
+      gene_d: 1,
+      gene_p: 1,
+      blood: {},
+      color: "wild",
+      why: "开局褐，基因码 1",
+    };
+  }
+  function resetField() {
+    nextId = 1;
+    selected = [];
+    lastBorn = [];
+    flies = [starter("褐公", "m"), starter("褐母", "f")];
+    $("log").innerHTML = "";
+    save();
+    render();
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify({ nextId, flies })); } catch (e) {}
+  }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (s && Array.isArray(s.flies) && s.flies.length) {
+        flies = s.flies;
+        nextId = Number(s.nextId) || flies.length + 1;
+        return;
+      }
+    } catch (e) {}
+    resetField();
+  }
+
+  function toggle(id) {
+    const i = selected.indexOf(id);
+    if (i >= 0) selected.splice(i, 1);
+    else {
+      if (selected.length >= 2) selected.shift();
+      selected.push(id);
+    }
+    render();
+  }
+
+  function pairOk(a, b) {
+    return a && b && a.sex && b.sex && a.sex !== b.sex;
+  }
+
+  function render() {
+    const a = selected[0] && flies.find((f) => f.id === selected[0]);
+    const b = selected[1] && flies.find((f) => f.id === selected[1]);
+    $("breed").disabled = !pairOk(a, b);
+    if (pairOk(a, b)) {
+      const dad = a.sex === "m" ? a : b;
+      const mom = a.sex === "f" ? a : b;
+      $("pickHint").textContent = "♂ " + dad.codon + " × ♀ " + mom.codon;
+    } else if (selected.length === 2) $("pickHint").textContent = "要一公一母";
+    else if (selected.length === 1) $("pickHint").textContent = "再点一只异性";
+    else $("pickHint").textContent = "还没选";
+
+    $("field").innerHTML = flies.map((f) => {
+      const on = selected.includes(f.id) ? " on" : "";
+      const neu = lastBorn.includes(f.id) ? " new" : "";
+      const sex = f.sex === "f" ? "雌" : "雄";
+      const trait = bodyTrait(f.gene_d, f.gene_p);
+      return '<button type="button" class="fly' + on + neu + '" data-id="' + f.id + '">' +
+        '<div class="sex">' + sex + "</div>" +
+        '<div class="codon"><span class="lab">密码</span>' + (f.codon || "（空）") + "</div>" +
+        '<div class="meta">' + trait + " · D" + f.gene_d + " P" + f.gene_p +
+        ' <span class="face ' + (f.color || "wild") + '">' + (NAMES[f.color] || NAMES.wild) + "</span></div>" +
+        '<div class="meta">血 ' + formatBlood(f.blood) + "</div>" +
+        "</button>";
+    }).join("");
+    $("field").querySelectorAll(".fly").forEach((el) => {
+      el.onclick = () => toggle(el.getAttribute("data-id"));
+    });
+  }
+
+  function parentPayload(f) {
+    return { codon: f.codon, gene_d: f.gene_d, gene_p: f.gene_p, blood: f.blood || {} };
+  }
+  function digitLabel(e) {
+    if (e.digitFrom === "rand") return "随机 " + e.digit;
+    return (e.digitFrom === "a" ? "父体色" : "母体色") + " " + e.digit;
+  }
+  function pct(n) {
+    return (Math.round(Number(n) * 10000) / 100).toFixed(2) + "%";
+  }
+
+  async function breedIds(idA, idB) {
+    $("err").textContent = "";
+    if (!api || !api.simulateClutch) throw new Error("推演接口没接上，请从游戏面板打开");
+    const rawA = flies.find((f) => f.id === idA);
+    const rawB = flies.find((f) => f.id === idB);
+    if (!rawA || !rawB) throw new Error("找不到亲本");
+    if (!pairOk(rawA, rawB)) throw new Error("要一公一母");
+    const dad = rawA.sex === "m" ? rawA : rawB;
+    const mom = rawA.sex === "f" ? rawA : rawB;
+    const res = await api.simulateClutch(parentPayload(dad), parentPayload(mom), 3);
+    if (!res || !res.ok) throw new Error((res && res.error) || "推演失败");
+    const data = res.data || {};
+    const born = [];
+    const lines = [];
+    (data.eggs || []).forEach((e) => {
+      const kid = {
+        id: "f" + nextId++,
+        name: e.codon,
+        sex: e.sex,
+        codon: e.codon,
+        gene_d: e.geneD,
+        gene_p: e.geneP,
+        blood: e.bloodOut || {},
+        color: e.color,
+        why: e.why,
+      };
+      flies.push(kid);
+      born.push(kid.id);
+      const follow = e.follow === "a" ? dad.codon : mom.codon;
+      const sx = e.sex === "f" ? "♀" : "♂";
+      const mut = e.mutated ? " · 末位突变 " + e.codonBeforeMut + "→" + e.codon : "";
+      lines.push(
+        "<p><b>" + sx + " " + kid.codon + "</b> 脸" + (NAMES[e.color] || e.color) +
+        " · " + bodyTrait(e.geneD, e.geneP) +
+        " · 主链跟 " + follow + " · 末位 " + digitLabel(e) + mut +
+        "</p><p class='hint'>血入 " + formatBlood(e.bloodIn) +
+        " → 记账 " + formatBlood(e.bloodTick) +
+        " → 出 " + formatBlood(e.bloodOut) +
+        "</p><p class='hint'>" + (e.why || "") + "</p>"
+      );
+    });
+    lastBorn = born;
+    save();
+    render();
+    const block = document.createElement("div");
+    block.className = "card";
+    const white = data.whiteChance == null ? "" : " · 白概率 " + pct(data.whiteChance);
+    block.innerHTML = "<div class='meta'>♂ " + dad.codon + " × ♀ " + mom.codon + white + "</div>" + lines.join("");
+    $("log").prepend(block);
+  }
+
+  $("breed").onclick = async () => {
+    if (selected.length !== 2) return;
+    try { await breedIds(selected[0], selected[1]); } catch (e) { $("err").textContent = e.message || String(e); }
+  };
+  $("rand").onclick = async () => {
+    const males = flies.filter((f) => f.sex === "m");
+    const females = flies.filter((f) => f.sex === "f");
+    if (!males.length || !females.length) {
+      $("err").textContent = "场上没有成对的公母";
+      return;
+    }
+    const dad = males[Math.floor(Math.random() * males.length)];
+    const mom = females[Math.floor(Math.random() * females.length)];
+    selected = [dad.id, mom.id];
+    render();
+    try { await breedIds(dad.id, mom.id); } catch (e) { $("err").textContent = e.message || String(e); }
+  };
+  $("reset").onclick = resetField;
+
+  load();
+  render();
+</script>
+</body>
+</html>
