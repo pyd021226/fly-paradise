@@ -101,15 +101,14 @@ export function mutationOf(codon) {
 }
 
 export function mutateCodon(codon) {
-  if (!codon) return codon;
-  // 前置位锁死，只允许刚接上的最后一位以 0.5% 变。
-  const last = codon.length - 1;
-  let d = codon[last];
-  if (Math.random() < 0.005) {
-    const opts = ["1", "2", "3", "4"].filter((x) => x !== d);
-    d = opts[Math.floor(Math.random() * opts.length)];
-  }
-  return codon.slice(0, last) + d;
+  if (!codon || codon.length < 3) return codon;
+  // 前两位锁死。其余任意一位以 0.5% 突变（命中后随机抽一位改）。
+  if (Math.random() >= 0.005) return codon;
+  const idx = 2 + Math.floor(Math.random() * (codon.length - 2));
+  const d = codon[idx];
+  const opts = ["1", "2", "3", "4"].filter((x) => x !== d);
+  const n = opts[Math.floor(Math.random() * opts.length)];
+  return codon.slice(0, idx) + n + codon.slice(idx + 1);
 }
 
 export function lastDigitOf(g) {
@@ -236,7 +235,12 @@ export function formatBlood(blood) {
     if (!s || (s.n <= 0 && s.charge <= 0)) continue;
     parts.push(FAM_NAME[fam] + s.n + (s.charge ? "充" + s.charge : ""));
   }
-  return parts.length ? parts.join(" ") : "空";
+  return parts.length ? parts.join(" ") : "无突变";
+}
+
+function bloodPhrase(blood) {
+  const s = formatBlood(blood);
+  return s === "无突变" ? "无突变" : "血 " + s;
 }
 
 function leaderInfo(blood) {
@@ -264,14 +268,14 @@ function explainEgg(codon, followCodon, otherCodon, bloodTick, bloodOut, color, 
     const fam = familyOf(codon);
     bits.push("主链 " + codon + " 自己显" + (fam ? FAM_NAME[fam] : colorName(look.color)) + (look.bright ? "亮一档" : ""));
     bits.push("不借脸，充能保留");
-    bits.push("血 " + formatBlood(bloodOut));
+    bits.push(bloodPhrase(bloodOut));
     return bits.join("。") + "。";
   }
   if (skip) {
     bits.push("两只普通褐不走血账");
     bits.push("主链 " + (codon || "空") + " 无门");
     bits.push("脸上底色" + colorName(morphBase(geneD, geneP)));
-    bits.push("血 " + formatBlood(bloodOut));
+    bits.push(bloodPhrase(bloodOut));
     return bits.join("。") + "。";
   }
   const fam = familyOf(codon);
@@ -298,7 +302,7 @@ function explainEgg(codon, followCodon, otherCodon, bloodTick, bloodOut, color, 
     }
   }
   if (!borrowed) bits.push("脸上底色" + colorName(color));
-  bits.push("血 " + formatBlood(bloodOut));
+  bits.push(bloodPhrase(bloodOut));
   return bits.join("。") + "。";
 }
 
@@ -311,16 +315,21 @@ export function simulateEgg(a, b, appendFromId) {
   const follow = inheritA ? a : b;
   const other = inheritA ? b : a;
   let digitFrom;
+  let digitSrc;
   let digit;
   if (appendFromId && appendFromId === a.fly_id) {
     digitFrom = "a";
+    digitSrc = "a";
     digit = baseDigitOf(a.gene_d, a.gene_p);
   } else if (appendFromId && appendFromId === b.fly_id) {
     digitFrom = "b";
+    digitSrc = "b";
     digit = baseDigitOf(b.gene_d, b.gene_p);
   } else {
     digitFrom = "rand";
-    digit = ["1", "2", "3", "4"][Math.floor(Math.random() * 4)];
+    digitSrc = Math.random() < 0.5 ? "a" : "b";
+    const src = digitSrc === "a" ? a : b;
+    digit = baseDigitOf(src.gene_d, src.gene_p);
   }
   const codonBeforeMut = (follow.codon || "") + digit;
   const codon = mutateCodon(codonBeforeMut);
@@ -330,6 +339,7 @@ export function simulateEgg(a, b, appendFromId) {
   return {
     follow: followSide,
     digitFrom,
+    digitSrc,
     digit,
     geneD,
     geneP,
