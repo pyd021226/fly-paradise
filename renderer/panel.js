@@ -139,12 +139,6 @@ $('sexM').onchange = () => setSex($('sexM').checked ? 'm' : 'f');
 $('sexF').onchange = () => setSex($('sexF').checked ? 'f' : 'm');
 $('add').onclick = () => api.send('addFly', { sex });
 $('scare').onclick = () => api.send('scareAll');
-$('codon').onclick = () => {
-  const btn = $('codon');
-  btn.classList.toggle('on');
-  btn.textContent = btn.classList.contains('on') ? '隐藏基因码' : '显示基因码';
-  api.send('codon');
-};
 if ($('openSim')) $('openSim').onclick = () => api.send('openSim');
 $('fast').onclick = () => api.send('fast');
 $('logout').onclick = async () => {

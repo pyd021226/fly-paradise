@@ -196,12 +196,10 @@
       const on = selected.includes(f.id) ? " on" : "";
       const neu = lastBorn.includes(f.id) ? " new" : "";
       const sex = f.sex === "f" ? "雌" : "雄";
-      const trait = bodyTrait(f.gene_d, f.gene_p);
       return '<button type="button" class="fly' + on + neu + '" data-id="' + f.id + '">' +
         '<div class="sex">' + sex + "</div>" +
         '<div class="codon"><span class="lab">密码</span>' + (f.codon || "（空）") + "</div>" +
-        '<div class="meta">' + trait +
-        ' <span class="face ' + (f.color || "wild") + '">' + (NAMES[f.color] || NAMES.wild) + "</span></div>" +
+        '<div class="meta"><span class="face ' + (f.color || "wild") + '">' + (NAMES[f.color] || NAMES.wild) + "</span></div>" +
         '<div class="meta">' + showBlood(formatBlood(f.blood)) + "</div>" +
         "</button>";
     }).join("");
@@ -261,7 +259,6 @@
         : "血入 " + bin + " → 记账 " + btick + " → 出 " + bout;
       lines.push(
         "<p><b>" + sx + " " + kid.codon + "</b> 脸" + (NAMES[e.color] || e.color) +
-        " · " + bodyTrait(e.geneD, e.geneP) +
         " · 主链跟 " + follow + " · 末位 " + digitLabel(e) + mut +
         "</p><p class='hint'>" + bloodLine +
         "</p><p class='hint'>" + (e.why || "") + "</p>"

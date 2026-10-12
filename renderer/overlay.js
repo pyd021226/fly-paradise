@@ -3834,7 +3834,6 @@ function draw(now) {
   for (const s of splats) drawSplat(s);
   for (const c of corpses) if (!nestHidden(c)) drawCorpse(c);
   for (const f of flies) drawFly(f, now);
-  if (showCodons) drawCodons();
   if (swatterOn) drawSwatter();
   if (ragOn) {
     drawRag();
