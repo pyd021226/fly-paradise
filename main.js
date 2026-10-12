@@ -49,6 +49,7 @@ let captureOpen = false;
 let paused = false;
 let fast = false;
 let watch = false;
+let nestPeek = false;
 let mouseTimer = null;
 let iconTimer = null;
 let explorerTimer = null;
@@ -163,7 +164,7 @@ function applyLayer() {
   if (!overlay || overlay.isDestroyed()) return;
   glueOverlay();
   send('cmd', { name: 'watch', value: watch });
-  if (watch) {
+  if (watch || nestPeek) {
     overlay.setAlwaysOnTop(true, 'screen-saver');
     overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   } else {
@@ -503,20 +504,37 @@ function decorateIcons(list, physical) {
   });
 }
 
+function folderWindowTitle(title) {
+  return String(title || '').replace(/\s*[-–—]\s*(文件资源管理器|File Explorer|Windows Explorer)\s*$/i, '').trim();
+}
+
+function explorerIsNest(title) {
+  const t = folderWindowTitle(title);
+  if (!t) return false;
+  if (isRecycleBinName(t)) return true;
+  return !!desktopFolderPath(t);
+}
+
 function publishExplorers() {
   if (!overlay || overlay.isDestroyed()) return;
   const list = listFolderWindows();
-  send('explorers', {
-    windows: toOverlayIcons(list.map((w, i) => ({
-      id: 'ex:' + i + ':' + w.title,
-      name: w.title,
-      title: w.title,
-      x: w.x,
-      y: w.y,
-      w: w.w,
-      h: w.h,
-    })), true),
-  });
+  const windows = toOverlayIcons(list.map((w, i) => ({
+    id: 'ex:' + i + ':' + w.title,
+    name: w.title,
+    title: w.title,
+    x: w.x,
+    y: w.y,
+    w: w.w,
+    h: w.h,
+  })), true);
+  const peek = windows.some((w) => explorerIsNest(w.title || w.name));
+  if (peek !== nestPeek) {
+    nestPeek = peek;
+    applyLayer();
+  } else {
+    nestPeek = peek;
+  }
+  send('explorers', { windows });
 }
 
 function publishIcons() {
