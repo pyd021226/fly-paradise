@@ -348,12 +348,30 @@ function nestKeyOf(ic) {
   return ic.folderPath || null;
 }
 
+function folderWindowTitle(title) {
+  let t = String(title || '').trim();
+  t = t.replace(/\s*[-–—]\s*(文件资源管理器|File Explorer|Windows Explorer)\s*$/i, '').trim();
+  return t;
+}
+
+function explorerNestKey(win) {
+  if (!win) return null;
+  if (win.nestKey) return win.nestKey;
+  const t = folderWindowTitle(win.title || win.name || '');
+  if (!t) return null;
+  if (t === '回收站' || /^recycle bin$/i.test(t)) return ':bin';
+  const exact = icons.find((i) => i.folderPath && i.name === t);
+  if (exact) return exact.folderPath;
+  const loose = icons.find((i) => i.folderPath && (t.startsWith(i.name) || i.name.startsWith(t)));
+  return loose ? loose.folderPath : null;
+}
+
 function nestView(key) {
   if (!key) return null;
-  const w = explorers.find((e) => e.nestKey === key);
+  const w = explorers.find((e) => explorerNestKey(e) === key);
   if (!w || w.w < 80 || w.h < 80) return null;
-  const top = Math.min(140, Math.max(72, w.h * 0.22));
-  const pad = 14;
+  const top = Math.min(120, Math.max(56, w.h * 0.18));
+  const pad = 10;
   return {
     x: w.x + pad,
     y: w.y + top,

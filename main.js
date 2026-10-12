@@ -11,8 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { fetchLiveIcons } from './src/icons.js';
 import { fetchIconRects } from './src/icon-rects.js';
 import { startRawMouse, stopRawMouse } from './src/raw-mouse.js';
-import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs, windowRect } from './src/desktop-layer.js';
-import { fetchExplorerWindows } from './src/explorer-windows.js';
+import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs, listFolderWindows } from './src/desktop-layer.js';
 import * as flyApi from './server-client.js';
 import { asBlood, simulateClutch, whiteChance } from './src/sim-engine.mjs';
 
@@ -506,23 +505,17 @@ function decorateIcons(list, physical) {
 
 function publishExplorers() {
   if (!overlay || overlay.isDestroyed()) return;
-  fetchExplorerWindows().then((list) => {
-    if (!overlay || overlay.isDestroyed()) return;
-    const physical = [];
-    for (const w of list || []) {
-      const r = windowRect(w.hwnd);
-      if (!r) continue;
-      physical.push({
-        id: 'ex:' + w.hwnd,
-        name: w.path || w.url || '',
-        nestKey: w.nestKey,
-        x: r.x,
-        y: r.y,
-        w: r.w,
-        h: r.h,
-      });
-    }
-    send('explorers', { windows: toOverlayIcons(physical, true) });
+  const list = listFolderWindows();
+  send('explorers', {
+    windows: toOverlayIcons(list.map((w, i) => ({
+      id: 'ex:' + i + ':' + w.title,
+      name: w.title,
+      title: w.title,
+      x: w.x,
+      y: w.y,
+      w: w.w,
+      h: w.h,
+    })), true),
   });
 }
 
