@@ -516,7 +516,10 @@ function explorerIsNest(title) {
 }
 
 function hideNestPeek() {
-  if (nestPeekWin && !nestPeekWin.isDestroyed()) nestPeekWin.hide();
+  if (nestPeekWin && !nestPeekWin.isDestroyed()) {
+    nestPeekWin.close();
+  }
+  nestPeekWin = null;
 }
 
 function showNestPeek(data) {

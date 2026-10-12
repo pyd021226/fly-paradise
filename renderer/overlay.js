@@ -202,6 +202,7 @@ let H = innerHeight;
 let icons = [];
 let explorers = [];
 let nestAnchors = {};
+let nestPeekOn = false;
 let mouse = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, spd: 0 };
 let swatterOn = false;
 let ragOn = false;
@@ -362,9 +363,7 @@ function explorerNestKey(win) {
   if (!t) return null;
   if (t === '回收站' || /^recycle bin$/i.test(t)) return ':bin';
   const exact = icons.find((i) => i.folderPath && i.name === t);
-  if (exact) return exact.folderPath;
-  const loose = icons.find((i) => i.folderPath && (t.startsWith(i.name) || i.name.startsWith(t)));
-  return loose ? loose.folderPath : null;
+  return exact ? exact.folderPath : null;
 }
 
 function nestView(key) {
@@ -436,7 +435,15 @@ function publishNestPeek() {
       break;
     }
   }
-  window.fly.sendNestPeek(pick || { on: false });
+  if (!pick) {
+    if (nestPeekOn) {
+      nestPeekOn = false;
+      window.fly.sendNestPeek({ on: false });
+    }
+    return;
+  }
+  nestPeekOn = true;
+  window.fly.sendNestPeek(pick);
 }
 
 function nestIcon(key) {
@@ -3923,7 +3930,6 @@ function draw(now) {
   for (const c of corpses) if (!isNestUnit(c)) drawCorpse(c);
   for (const f of flies) drawFly(f, now);
   if (showCodons) drawCodons();
-  punchOpenFolders();
   for (const f of foods) if (isNestUnit(f) && !nestHidden(f)) drawFood(f);
   for (const e of eggs) if (isNestUnit(e) && !nestHidden(e)) drawEgg(e);
   for (const p of pupae) if (isNestUnit(p) && !nestHidden(p)) drawPupa(p, now, false);
