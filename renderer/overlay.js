@@ -385,6 +385,25 @@ function nestHidden(u) {
   return !!(u && u.nestKey && !nestView(u.nestKey));
 }
 
+function isNestUnit(u) {
+  return !!(u && u.nestKey);
+}
+
+function punchOpenFolders() {
+  const seen = new Set();
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.fillStyle = '#000';
+  for (const w of explorers) {
+    if (!explorerNestKey(w) || w.w < 80 || w.h < 80) continue;
+    const id = w.id || `${w.x},${w.y}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    ctx.fillRect(w.x, w.y, w.w, w.h);
+  }
+  ctx.restore();
+}
+
 function nestIcon(key) {
   if (!key) return null;
   if (key === ':bin') return icons.find((ic) => ic.binIcon || ic.recycleBin) || null;
@@ -3859,16 +3878,23 @@ function draw(now) {
     ctx.fillStyle = 'rgba(0,0,0,0.02)';
     ctx.fillRect(0, 0, W, H);
   }
-  for (const f of foods) if (!nestHidden(f)) drawFood(f);
-  for (const e of eggs) if (!nestHidden(e)) drawEgg(e);
-  for (const p of pupae) if (!nestHidden(p)) drawPupa(p, now, false);
-  for (const L of larvae) if (!nestHidden(L)) drawLarva(L);
-  for (const s of shells) if (!nestHidden(s)) drawPupa(s, now, true);
+  for (const f of foods) if (!isNestUnit(f)) drawFood(f);
+  for (const e of eggs) if (!isNestUnit(e)) drawEgg(e);
+  for (const p of pupae) if (!isNestUnit(p)) drawPupa(p, now, false);
+  for (const L of larvae) if (!isNestUnit(L)) drawLarva(L);
+  for (const s of shells) if (!isNestUnit(s)) drawPupa(s, now, true);
   punchIcons();
   for (const s of splats) drawSplat(s);
-  for (const c of corpses) if (!nestHidden(c)) drawCorpse(c);
+  for (const c of corpses) if (!isNestUnit(c)) drawCorpse(c);
   for (const f of flies) drawFly(f, now);
   if (showCodons) drawCodons();
+  punchOpenFolders();
+  for (const f of foods) if (isNestUnit(f) && !nestHidden(f)) drawFood(f);
+  for (const e of eggs) if (isNestUnit(e) && !nestHidden(e)) drawEgg(e);
+  for (const p of pupae) if (isNestUnit(p) && !nestHidden(p)) drawPupa(p, now, false);
+  for (const L of larvae) if (isNestUnit(L) && !nestHidden(L)) drawLarva(L);
+  for (const s of shells) if (isNestUnit(s) && !nestHidden(s)) drawPupa(s, now, true);
+  for (const c of corpses) if (isNestUnit(c) && !nestHidden(c)) drawCorpse(c);
   if (swatterOn) drawSwatter();
   if (ragOn) {
     drawRag();
