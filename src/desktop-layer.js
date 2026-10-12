@@ -174,8 +174,12 @@ export function windowRect(hwnd) {
   } catch {
     return null;
   }
-  const w = (rc.right || 0) - (rc.left || 0);
-  const ht = (rc.bottom || 0) - (rc.top || 0);
+  const left = Number(rc.left) || 0;
+  const top = Number(rc.top) || 0;
+  const right = Number(rc.right) || 0;
+  const bottom = Number(rc.bottom) || 0;
+  const w = right - left;
+  const ht = bottom - top;
   if (w < 80 || ht < 80) return null;
-  return { x: rc.left, y: rc.top, w, h };
+  return { x: left, y: top, w, h };
 }

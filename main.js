@@ -393,10 +393,10 @@ function toOverlayIcons(list, physical) {
   if (!overlay || overlay.isDestroyed()) return [];
   const b = overlay.getBounds();
   return list.map((ic) => {
-    let x = ic.x;
-    let y = ic.y;
-    let w = ic.w;
-    let h = ic.h;
+    let x = Number(ic.x) || 0;
+    let y = Number(ic.y) || 0;
+    let w = Number(ic.w) || 0;
+    let h = Number(ic.h) || 0;
     if (physical) {
       const tl = screen.screenToDipPoint({ x, y });
       const br = screen.screenToDipPoint({ x: x + w, y: y + h });
