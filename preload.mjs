@@ -3,7 +3,6 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('fly', {
   onAmbient: (cb) => ipcRenderer.on('ambient', (_e, d) => cb(d)),
   onIcons: (cb) => ipcRenderer.on('icons', (_e, d) => cb(d)),
-  onExplorers: (cb) => ipcRenderer.on('explorers', (_e, d) => cb(d)),
   onCmd: (cb) => ipcRenderer.on('cmd', (_e, d) => cb(d)),
   onSwatter: (cb) => ipcRenderer.on('swatter', (_e, d) => cb(d)),
   onRag: (cb) => ipcRenderer.on('rag', (_e, d) => cb(d)),
@@ -15,7 +14,6 @@ contextBridge.exposeInMainWorld('fly', {
   putAway: () => ipcRenderer.send('swatter-off'),
   sendLife: (s) => ipcRenderer.send('life-stats', s),
   sendSnapshot: (s) => ipcRenderer.send('snapshot', s),
-  sendNestPeek: (s) => ipcRenderer.send('nest-peek', s),
   fanfare: (on) => ipcRenderer.send('fanfare', !!on),
   signIn: (email, password) => ipcRenderer.invoke('fly-signin', { email, password }),
   signOut: () => ipcRenderer.invoke('fly-signout'),

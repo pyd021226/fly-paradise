@@ -6,12 +6,11 @@ import {
 } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { fetchLiveIcons } from './src/icons.js';
 import { fetchIconRects } from './src/icon-rects.js';
 import { startRawMouse, stopRawMouse } from './src/raw-mouse.js';
-import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs, listFolderWindows } from './src/desktop-layer.js';
+import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs } from './src/desktop-layer.js';
 import * as flyApi from './server-client.js';
 import { asBlood, simulateClutch, whiteChance } from './src/sim-engine.mjs';
 
@@ -42,7 +41,6 @@ let autoStart = isAnnoy;
 let overlay = null;
 let panel = null;
 let simWin = null;
-let nestPeekWin = null;
 let swatterOn = false;
 let ragOn = false;
 let netOn = false;
@@ -52,7 +50,6 @@ let fast = false;
 let watch = false;
 let mouseTimer = null;
 let iconTimer = null;
-let explorerTimer = null;
 let pinTimer = null;
 let clickTimer = null;
 
@@ -394,10 +391,10 @@ function toOverlayIcons(list, physical) {
   if (!overlay || overlay.isDestroyed()) return [];
   const b = overlay.getBounds();
   return list.map((ic) => {
-    let x = Number(ic.x) || 0;
-    let y = Number(ic.y) || 0;
-    let w = Number(ic.w) || 0;
-    let h = Number(ic.h) || 0;
+    let x = ic.x;
+    let y = ic.y;
+    let w = ic.w;
+    let h = ic.h;
     if (physical) {
       const tl = screen.screenToDipPoint({ x, y });
       const br = screen.screenToDipPoint({ x: x + w, y: y + h });
@@ -475,19 +472,6 @@ function rememberBin(list) {
   });
 }
 
-function desktopFolderPath(name) {
-  const n = String(name || '').trim();
-  if (!n || /\.lnk$/i.test(n)) return null;
-  const dirs = [path.join(os.homedir(), 'Desktop'), 'C:\\Users\\Public\\Desktop'];
-  for (const dir of dirs) {
-    const p = path.join(dir, n);
-    try {
-      if (fs.statSync(p).isDirectory()) return p.toLowerCase();
-    } catch { /* not a folder */ }
-  }
-  return null;
-}
-
 function decorateIcons(list, physical) {
   const binHas = recycleCached();
   return toOverlayIcons(list, physical).map((ic, i) => {
@@ -497,93 +481,8 @@ function decorateIcons(list, physical) {
     return {
       ...ic,
       recycleBin: !!(binHas && isBin),
-      binIcon: !!isBin,
-      folderPath: isBin ? null : desktopFolderPath(ic.name),
       lastLaunch: launches.get(ic.name) || launches.get(ic.id) || 0,
     };
-  });
-}
-
-function folderWindowTitle(title) {
-  return String(title || '').replace(/\s*[-–—]\s*(文件资源管理器|File Explorer|Windows Explorer)\s*$/i, '').trim();
-}
-
-function explorerIsNest(title) {
-  const t = folderWindowTitle(title);
-  if (!t) return false;
-  if (isRecycleBinName(t)) return true;
-  return !!desktopFolderPath(t);
-}
-
-function hideNestPeek() {
-  if (nestPeekWin && !nestPeekWin.isDestroyed()) {
-    nestPeekWin.close();
-  }
-  nestPeekWin = null;
-}
-
-function showNestPeek(data) {
-  if (!overlay || overlay.isDestroyed() || !data || !data.on) {
-    hideNestPeek();
-    return;
-  }
-  const b = overlay.getBounds();
-  const bounds = {
-    x: Math.round(b.x + (Number(data.x) || 0)),
-    y: Math.round(b.y + (Number(data.y) || 0)),
-    width: Math.max(80, Math.round(Number(data.w) || 0)),
-    height: Math.max(80, Math.round(Number(data.h) || 0)),
-  };
-  if (!nestPeekWin || nestPeekWin.isDestroyed()) {
-    nestPeekWin = new BrowserWindow({
-      ...bounds,
-      frame: false,
-      transparent: true,
-      skipTaskbar: true,
-      focusable: false,
-      hasShadow: false,
-      resizable: false,
-      maximizable: false,
-      minimizable: false,
-      fullscreenable: false,
-      backgroundColor: '#00000000',
-      autoHideMenuBar: true,
-      webPreferences: {
-        preload: path.join(HERE, 'preload-nest.mjs'),
-        sandbox: false,
-      },
-    });
-    nestPeekWin.setMenu(null);
-    nestPeekWin.setAlwaysOnTop(true, 'screen-saver');
-    nestPeekWin.setIgnoreMouseEvents(true, { forward: true });
-    nestPeekWin.loadFile(path.join(HERE, 'renderer', 'nest-peek.html'));
-    nestPeekWin.on('closed', () => { nestPeekWin = null; });
-    nestPeekWin.webContents.once('did-finish-load', () => {
-      if (nestPeekWin && !nestPeekWin.isDestroyed()) nestPeekWin.webContents.send('nest-draw', data);
-    });
-    return;
-  }
-  const cur = nestPeekWin.getBounds();
-  if (cur.x !== bounds.x || cur.y !== bounds.y || cur.width !== bounds.width || cur.height !== bounds.height) {
-    nestPeekWin.setBounds(bounds);
-  }
-  if (!nestPeekWin.isVisible()) nestPeekWin.showInactive();
-  nestPeekWin.webContents.send('nest-draw', data);
-}
-
-function publishExplorers() {
-  if (!overlay || overlay.isDestroyed()) return;
-  const list = listFolderWindows();
-  send('explorers', {
-    windows: toOverlayIcons(list.map((w, i) => ({
-      id: 'ex:' + i + ':' + w.title,
-      name: w.title,
-      title: w.title,
-      x: w.x,
-      y: w.y,
-      w: w.w,
-      h: w.h,
-    })), true),
   });
 }
 
@@ -729,8 +628,6 @@ if (!app.requestSingleInstanceLock()) {
       if (!overlay || overlay.isDestroyed()) return;
       mouseTimer = setInterval(pollMouse, 1000 / 30);
       iconTimer = setInterval(publishIcons, 400);
-      explorerTimer = setInterval(publishExplorers, 800);
-      publishExplorers();
       clickTimer = setInterval(() => {
         if (!toolOn()) trackDesktopClicks();
       }, 50);
@@ -743,7 +640,6 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('snapshot', (_e, data) => {
       if (data && data.breed) writeSave(data);
     });
-    ipcMain.on('nest-peek', (_e, data) => showNestPeek(data));
 
     ipcMain.on('fanfare', (_e, on) => {
       if (!overlay || overlay.isDestroyed()) return;
@@ -909,11 +805,9 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   app.isQuitting = true;
   if (overlay && !overlay.isDestroyed()) stopRawMouse(overlay);
-  hideNestPeek();
   globalShortcut.unregisterAll();
   clearInterval(mouseTimer);
   clearInterval(iconTimer);
-  clearInterval(explorerTimer);
   clearInterval(pinTimer);
   clearInterval(clickTimer);
 });

@@ -40,8 +40,6 @@ const BREED_PUPAE = 18;
 const RIPE_MS = 120000;
 const AIR_MAX_MS = 15000;
 const ICON_PX = 32;
-const NEST_W = 480;
-const NEST_H = 320;
 const FAST_MS = 1500;
 const FAST_EAT = 2;
 const LIFE_MS = 15 * 60 * 1000;
@@ -200,9 +198,6 @@ function adultsFull() { return breed && breedingAdults() >= BREED_ADULTS; }
 let W = innerWidth;
 let H = innerHeight;
 let icons = [];
-let explorers = [];
-let nestAnchors = {};
-let nestPeekOn = false;
 let mouse = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, spd: 0 };
 let swatterOn = false;
 let ragOn = false;
@@ -344,254 +339,6 @@ function currentCell(x, y) {
   return null;
 }
 
-function nestKeyOf(ic) {
-  if (!ic) return null;
-  if (ic.binIcon || ic.recycleBin) return ':bin';
-  return ic.folderPath || null;
-}
-
-function folderWindowTitle(title) {
-  let t = String(title || '').trim();
-  t = t.replace(/\s*[-–—]\s*(文件资源管理器|File Explorer|Windows Explorer)\s*$/i, '').trim();
-  return t;
-}
-
-function explorerNestKey(win) {
-  if (!win) return null;
-  if (win.nestKey) return win.nestKey;
-  const t = folderWindowTitle(win.title || win.name || '');
-  if (!t) return null;
-  if (t === '回收站' || /^recycle bin$/i.test(t)) return ':bin';
-  const exact = icons.find((i) => i.folderPath && i.name === t);
-  return exact ? exact.folderPath : null;
-}
-
-function nestView(key) {
-  if (!key) return null;
-  const w = explorers.find((e) => explorerNestKey(e) === key);
-  if (!w || w.w < 80 || w.h < 80) return null;
-  const top = Math.min(120, Math.max(56, w.h * 0.18));
-  const pad = 10;
-  return {
-    x: w.x + pad,
-    y: w.y + top,
-    w: Math.max(80, w.w - pad * 2),
-    h: Math.max(80, w.h - top - pad),
-  };
-}
-
-function nestHidden(u) {
-  return !!(u && u.nestKey && !nestView(u.nestKey));
-}
-
-function isNestUnit(u) {
-  return !!(u && u.nestKey);
-}
-
-function punchOpenFolders() {
-  const seen = new Set();
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.fillStyle = '#000';
-  for (const w of explorers) {
-    if (!explorerNestKey(w) || w.w < 80 || w.h < 80) continue;
-    const id = w.id || `${w.x},${w.y}`;
-    if (seen.has(id)) continue;
-    seen.add(id);
-    ctx.fillRect(w.x, w.y, w.w, w.h);
-  }
-  ctx.restore();
-}
-
-function publishNestPeek() {
-  if (!window.fly || !window.fly.sendNestPeek) return;
-  let pick = null;
-  for (const w of explorers) {
-    const key = explorerNestKey(w);
-    if (!key || w.w < 80 || w.h < 80) continue;
-    const units = [];
-    const take = (list, kind) => {
-      for (const u of list) {
-        if (u.nestKey !== key) continue;
-        units.push({
-          kind,
-          x: (u.x || 0) - w.x,
-          y: (u.y || 0) - w.y,
-          rot: u.rot || 0,
-          heading: u.heading || 0,
-          instar: u.instar || 1,
-          color: u.color || 'wild',
-        });
-      }
-    };
-    take(eggs, 'egg');
-    take(larvae, 'larva');
-    take(pupae, 'pupa');
-    take(shells, 'shell');
-    take(foods, 'food');
-    take(corpses, 'corpse');
-    if (units.length) {
-      pick = { on: true, x: w.x, y: w.y, w: w.w, h: w.h, units };
-      break;
-    }
-  }
-  if (!pick) {
-    if (nestPeekOn) {
-      nestPeekOn = false;
-      window.fly.sendNestPeek({ on: false });
-    }
-    return;
-  }
-  nestPeekOn = true;
-  window.fly.sendNestPeek(pick);
-}
-
-function nestIcon(key) {
-  if (!key) return null;
-  if (key === ':bin') return icons.find((ic) => ic.binIcon || ic.recycleBin) || null;
-  return icons.find((ic) => ic.folderPath === key) || null;
-}
-
-function mapNestUnit(u) {
-  if (!u || !u.nestKey) return;
-  const v = nestView(u.nestKey);
-  if (!v) return;
-  const nx = Number(u.nx);
-  const ny = Number(u.ny);
-  u.x = v.x + ((Number.isFinite(nx) ? nx : NEST_W / 2) / NEST_W) * v.w;
-  u.y = v.y + ((Number.isFinite(ny) ? ny : NEST_H / 2) / NEST_H) * v.h;
-}
-
-function syncNestWorld() {
-  for (const list of [eggs, larvae, pupae, foods, shells, corpses]) {
-    for (const u of list) mapNestUnit(u);
-  }
-}
-
-function wrapNest(u) {
-  u.nx = clamp(u.nx, 12, NEST_W - 12);
-  u.ny = clamp(u.ny, 12, NEST_H - 12);
-}
-
-function liveNestKeys() {
-  const keys = new Set();
-  for (const ic of icons) {
-    const k = nestKeyOf(ic);
-    if (k) keys.add(k);
-  }
-  return keys;
-}
-
-function rememberNestAnchors() {
-  const next = {};
-  for (const ic of icons) {
-    const k = nestKeyOf(ic);
-    if (!k) continue;
-    const c = iconPad(ic);
-    next[k] = { x: c.x, y: c.y };
-  }
-  nestAnchors = { ...nestAnchors, ...next };
-}
-
-function spillNest(key) {
-  if (!key) return;
-  const a = nestAnchors[key] || { x: W / 2, y: H / 2 };
-  const dump = (u) => {
-    if (!u || u.nestKey !== key) return;
-    const nx = Number(u.nx);
-    const ny = Number(u.ny);
-    u.x = a.x + ((Number.isFinite(nx) ? nx / NEST_W : 0.5) - 0.5) * 48;
-    u.y = a.y + ((Number.isFinite(ny) ? ny / NEST_H : 0.5) - 0.5) * 48;
-    u.nestKey = null;
-    u.nx = undefined;
-    u.ny = undefined;
-    if (u.infinite) u.gone = true;
-  };
-  for (const e of eggs) dump(e);
-  for (const L of larvae) dump(L);
-  for (const p of pupae) dump(p);
-  for (const s of shells) dump(s);
-  for (const c of corpses) dump(c);
-  for (const f of foods) dump(f);
-  foods = foods.filter((f) => !f.gone);
-}
-
-function spillMissingNests() {
-  const live = liveNestKeys();
-  const seen = new Set();
-  for (const list of [eggs, larvae, pupae, foods, shells, corpses]) {
-    for (const u of list) {
-      if (u.nestKey) seen.add(u.nestKey);
-    }
-  }
-  for (const key of seen) {
-    if (!live.has(key)) spillNest(key);
-  }
-}
-
-function makeNestCrumb(key) {
-  const lumps = 2 + Math.floor(Math.random() * 3);
-  const bits = [];
-  for (let i = 0; i < lumps; i++) {
-    bits.push({
-      ox: rand(-7, 7),
-      oy: rand(-5, 6),
-      rx: rand(1.4, 3.2),
-      ry: rand(1.0, 2.4),
-      rot: rand(0, Math.PI),
-      hue: rand(38, 48),
-      light: rand(62, 78),
-    });
-  }
-  return {
-    id: nextId++,
-    iconId: '',
-    nestKey: key,
-    nx: rand(70, NEST_W - 70),
-    ny: rand(70, NEST_H - 70),
-    x: 0,
-    y: 0,
-    bits,
-    amount: 1,
-    eaters: [],
-    supply: FOOD_SUPPLY,
-    infinite: false,
-    attract: 1,
-  };
-}
-
-function ensureNestBinFood() {
-  let f = foods.find((x) => x.nestKey === ':bin' && x.infinite);
-  if (!f) {
-    foods.push({
-      id: nextId++,
-      iconId: '',
-      nestKey: ':bin',
-      nx: NEST_W * 0.5,
-      ny: NEST_H * 0.45,
-      x: 0,
-      y: 0,
-      bits: [],
-      amount: 1,
-      eaters: [],
-      supply: 1,
-      infinite: true,
-      attract: 2,
-    });
-  }
-}
-
-function spawnNestFood() {
-  const keys = liveNestKeys();
-  if (keys.has(':bin')) ensureNestBinFood();
-  for (const key of keys) {
-    if (key === ':bin') continue;
-    const n = foods.filter((f) => f.nestKey === key && !f.infinite).length;
-    if (n >= 2) continue;
-    if (Math.random() < 0.4) foods.push(makeNestCrumb(key));
-  }
-}
-
 function ringIcons(ic) {
   if (!ic) return [];
   const cx = ic.x + ic.w / 2;
@@ -607,11 +354,8 @@ function ringIcons(ic) {
 
 function onFood(x, y, food, pad) {
   if (!food) return false;
-  const p = Math.max(2, pad || 0);
-  if (food.nestKey) {
-    return Math.hypot((food.nx || 0) - x, (food.ny || 0) - y) < Math.max(p, 18);
-  }
   const ic = icons.find((i) => i.id === food.iconId);
+  const p = Math.max(2, pad || 0);
   if (ic) {
     const g = iconGlyph(ic);
     if (x >= g.x + p && x <= g.x + g.w - p && y >= g.y + p && y <= g.y + g.h - p) return true;
@@ -619,26 +363,13 @@ function onFood(x, y, food, pad) {
   return Math.hypot(food.x - x, food.y - y) < p;
 }
 
-function foodInRing(x, y, skipId, nestKey) {
-  if (nestKey) {
-    let best = null;
-    let bd = 1e9;
-    for (const f of foods) {
-      if (f.nestKey !== nestKey) continue;
-      if (skipId && f.id === skipId) continue;
-      if (!foodOpen(f)) continue;
-      const d = Math.hypot((f.nx || 0) - x, (f.ny || 0) - y);
-      if (d < bd) { bd = d; best = f; }
-    }
-    return best;
-  }
+function foodInRing(x, y, skipId) {
   const here = currentCell(x, y);
   if (!here) return null;
   const ids = new Set(ringIcons(here).map((i) => i.id));
   let best = null;
   let bd = 1e9;
   for (const f of foods) {
-    if (f.nestKey) continue;
     if (skipId && f.id === skipId) continue;
     if (!foodOpen(f)) continue;
     if (f.infinite) {
@@ -1063,12 +794,12 @@ function seekFoodIcon(from) {
 
 function seekFoodPoint(x, y, skipId) {
   if (inBinRadius(x, y)) {
-    const bin = foods.find((f) => f.infinite && !f.nestKey && f.id !== skipId);
+    const bin = foods.find((f) => f.infinite && f.id !== skipId);
     if (bin && foodOpen(bin)) return bin;
     let best = null;
     let bd = 1e9;
     for (const f of foods) {
-      if (f.nestKey || f.infinite || (skipId && f.id === skipId) || !foodOpen(f)) continue;
+      if (f.infinite || (skipId && f.id === skipId) || !foodOpen(f)) continue;
       const ic = icons.find((i) => i.id === f.iconId);
       if (!ic || !ic.nearBin) continue;
       const d = Math.hypot(f.x - x, f.y - y);
@@ -1084,7 +815,7 @@ function seekFoodPoint(x, y, skipId) {
 
 function spawnFood() {
   if (grabbing) return;
-  const crumbs = foods.filter((f) => !f.infinite && !f.nestKey);
+  const crumbs = foods.filter((f) => !f.infinite);
   if (!icons.length || crumbs.length >= MAX_FOOD) return;
   const used = new Set(foods.map((f) => f.iconId));
   const weighted = [];
@@ -2009,9 +1740,6 @@ async function layEggs(x, y, mom, dad, firstOf, clone) {
   const n = Math.min(want, room);
   const from = clone ? null : (firstOf && firstOf.length ? firstOf.slice() : null);
   const sexes = clone ? Array.from({ length: n }, () => (mom && mom.sex) || 'f') : clutchSexes(n);
-  const host = iconAt(x, y) || currentCell(x, y);
-  const key = nestKeyOf(host);
-  const bury = !!(key && Math.random() < 0.5);
   const useServer = !clone && !!(mom && dad && mom.serverId && dad.serverId && window.fly && window.fly.breed);
   let localEggs = null;
   if (!useServer && !clone && mom && dad) {
@@ -2049,11 +1777,8 @@ async function layEggs(x, y, mom, dad, firstOf, clone) {
       blood = e.bloodOut || {};
     }
     eggs.push({
-      x: bury ? 0 : x + rand(-12, 12),
-      y: bury ? 0 : y + rand(-10, 10),
-      nx: bury ? rand(50, NEST_W - 50) : undefined,
-      ny: bury ? rand(50, NEST_H - 50) : undefined,
-      nestKey: bury ? key : null,
+      x: x + rand(-12, 12),
+      y: y + rand(-10, 10),
       rot: rand(0, Math.PI),
       t: performance.now(),
       seed: rand(0, 80),
@@ -2139,7 +1864,6 @@ function throwNet(now) {
 }
 
 function catchNet(now) {
-  syncNestWorld();
   for (const f of flies) {
     if (f.state === 'dead') continue;
     if (!inNet(f.x, f.y)) continue;
@@ -2149,14 +1873,14 @@ function catchNet(now) {
   }
   flies = flies.filter((f) => f.state !== 'dead');
 
-  for (const e of eggs) if (!nestHidden(e) && inNet(e.x, e.y)) intoJar('egg', e);
-  eggs = eggs.filter((e) => nestHidden(e) || !inNet(e.x, e.y));
+  for (const e of eggs) if (inNet(e.x, e.y)) intoJar('egg', e);
+  eggs = eggs.filter((e) => !inNet(e.x, e.y));
 
-  for (const L of larvae) if (!nestHidden(L) && inNet(L.x, L.y)) intoJar('larva', L);
-  larvae = larvae.filter((L) => nestHidden(L) || !inNet(L.x, L.y));
+  for (const L of larvae) if (inNet(L.x, L.y)) intoJar('larva', L);
+  larvae = larvae.filter((L) => !inNet(L.x, L.y));
 
-  for (const p of pupae) if (!nestHidden(p) && inNet(p.x, p.y)) intoJar('pupa', p);
-  pupae = pupae.filter((p) => nestHidden(p) || !inNet(p.x, p.y));
+  for (const p of pupae) if (inNet(p.x, p.y)) intoJar('pupa', p);
+  pupae = pupae.filter((p) => !inNet(p.x, p.y));
 }
 
 function bounceJar(u) {
@@ -2559,9 +2283,6 @@ function hatchEgg(e, now) {
     id: nextId++,
     x: e.x,
     y: e.y,
-    nx: e.nx,
-    ny: e.ny,
-    nestKey: e.nestKey || null,
     heading: rand(0, Math.PI * 2),
     instar: 1,
     eatTimer: 0,
@@ -2670,14 +2391,10 @@ function settlePupa(x, y, rot) {
 }
 
 function pupate(L, now) {
-  const nest = L.nestKey || null;
-  const at = nest ? { x: L.nx, y: L.ny } : settlePupa(L.x, L.y, L.heading);
+  const at = settlePupa(L.x, L.y, L.heading);
   pupae.push({
-    x: nest ? L.x : at.x,
-    y: nest ? L.y : at.y,
-    nx: nest ? at.x : undefined,
-    ny: nest ? at.y : undefined,
-    nestKey: nest,
+    x: at.x,
+    y: at.y,
     rot: L.heading,
     t: now,
     seed: L.seed,
@@ -2694,15 +2411,7 @@ function pupate(L, now) {
 }
 
 function eclose(p, now) {
-  let x = p.x;
-  let y = p.y;
-  if (p.nestKey) {
-    const ic = nestIcon(p.nestKey);
-    const c = ic ? iconPad(ic) : (nestAnchors[p.nestKey] || { x: p.x, y: p.y });
-    x = c.x;
-    y = c.y;
-  }
-  const f = spawnFly(x, y, {
+  const f = spawnFly(p.x, p.y, {
     serverId: p.serverId,
     color: p.color,
     codon: p.codon || '1',
@@ -2713,15 +2422,7 @@ function eclose(p, now) {
     sex: p.sex,
   });
   if (!f) return false;
-  shells.push({
-    x: p.x,
-    y: p.y,
-    nx: p.nx,
-    ny: p.ny,
-    nestKey: p.nestKey || null,
-    rot: p.rot,
-    seed: p.seed,
-  });
+  shells.push({ x: p.x, y: p.y, rot: p.rot, seed: p.seed });
   f.needMeal = true;
   f.state = 'fly';
   f.mission = 'food';
@@ -2824,16 +2525,13 @@ function tickFoods(dt, now) {
   }
 }
 
-function nearestFood(x, y, skipId, raw, nestKey) {
+function nearestFood(x, y, skipId, raw) {
   let best = null;
   let bd = 1e9;
   for (const f of foods) {
     if (skipId && f.id === skipId) continue;
     if (!foodOpen(f)) continue;
-    if ((f.nestKey || null) !== (nestKey || null)) continue;
-    let d;
-    if (nestKey) d = Math.hypot((f.nx || 0) - x, (f.ny || 0) - y);
-    else d = Math.hypot(f.x - x, f.y - y);
+    let d = Math.hypot(f.x - x, f.y - y);
     if (!raw) d /= (f.attract || 1);
     if (d < bd) {
       bd = d;
@@ -2844,12 +2542,9 @@ function nearestFood(x, y, skipId, raw, nestKey) {
 }
 
 function stepLarva(L, dt, now) {
-  const nest = L.nestKey || null;
-  const px = nest ? (L.nx || 0) : L.x;
-  const py = nest ? (L.ny || 0) : L.y;
   const len = larvaLen(L.instar);
   const here = L.eatingFood && foods.find((f) => f.id === L.eatingFood);
-  if (here && onFood(px, py, here, Math.max(2, len * 0.2))) {
+  if (here && onFood(L.x, L.y, here, Math.max(2, len * 0.2))) {
     L.vx = 0;
     L.vy = 0;
     L.eatUnits = (L.eatUnits || 0) + dt;
@@ -2862,9 +2557,9 @@ function stepLarva(L, dt, now) {
     leaveFood(foods.find((f) => f.id === L.eatingFood), L.id);
     L.eatingFood = 0;
   }
-  const near = foodInRing(px, py, L.skipFood, nest);
-  const food = near || (nest ? nearestFood(px, py, L.skipFood, false, nest) : seekFoodPoint(px, py, L.skipFood));
-  if (food && onFood(px, py, food, len * 0.45) && joinFood(food, L.id)) {
+  const near = foodInRing(L.x, L.y, L.skipFood);
+  const food = near || seekFoodPoint(L.x, L.y, L.skipFood);
+  if (food && onFood(L.x, L.y, food, len * 0.45) && joinFood(food, L.id)) {
     L.eatingFood = food.id;
     L.vx = 0;
     L.vy = 0;
@@ -2877,24 +2572,16 @@ function stepLarva(L, dt, now) {
   if (now > (L.nextTurn || 0)) {
     L.nextTurn = now + rand(300, 1000);
     if (food) {
-      const fx = nest ? (food.nx || 0) : food.x;
-      const fy = nest ? (food.ny || 0) : food.y;
-      const want = Math.atan2(fy - py, fx - px);
+      const want = Math.atan2(food.y - L.y, food.x - L.x);
       L.heading = want + rand(-0.8, 0.8);
     } else L.heading += rand(-1.2, 1.2);
   }
   const spd = 40 * (L.instar === 1 ? 0.2 : L.instar === 2 ? 0.4 : 0.6);
   L.vx = Math.cos(L.heading) * spd;
   L.vy = Math.sin(L.heading) * spd;
-  if (nest) {
-    L.nx = px + L.vx * dt;
-    L.ny = py + L.vy * dt;
-    wrapNest(L);
-  } else {
-    L.x += L.vx * dt;
-    L.y += L.vy * dt;
-    wrapScreen(L);
-  }
+  L.x += L.vx * dt;
+  L.y += L.vy * dt;
+  wrapScreen(L);
 }
 
 function stepLife(dt, now) {
@@ -2924,7 +2611,6 @@ function startWash() {
 
 function wipeAt(x, y) {
   if (washLeftMs > 0) return;
-  syncNestWorld();
   const r2 = RAG_R * RAG_R;
   const nowOn = new Set();
   const touch = (s, kind, fallback) => {
@@ -2944,8 +2630,7 @@ function wipeAt(x, y) {
   };
   splats = splats.filter((s) => !touch(s, 'splat', '#4a1020'));
   shells = shells.filter((s) => {
-    if (nestHidden(s)) return true;
-    if (!s.nestKey && underIcon(s.x, s.y)) return true;
+    if (underIcon(s.x, s.y)) return true;
     const dx = s.x - x;
     const dy = s.y - y;
     if (dx * dx + dy * dy > r2) return true;
@@ -2959,7 +2644,6 @@ function wipeAt(x, y) {
     return true;
   });
   corpses = corpses.filter((s) => {
-    if (nestHidden(s)) return true;
     const fb = s.kind === 'larva' ? '#b39470' : s.kind === 'pupa' ? '#4a2814' : s.kind === 'egg' ? '#c4b496' : '#6b4524';
     return !touch(s, 'corpse', fb);
   });
@@ -3035,7 +2719,6 @@ function clampHandle() {
 }
 
 function swatAt(now) {
-  syncNestWorld();
   let hit = false;
   for (const f of flies) {
     if (f.state === 'dead') continue;
@@ -3046,34 +2729,31 @@ function swatAt(now) {
   }
   flies = flies.filter((f) => f.state !== 'dead');
   for (let i = eggs.length - 1; i >= 0; i--) {
-    if (nestHidden(eggs[i])) continue;
-    if (!eggs[i].nestKey && underIcon(eggs[i].x, eggs[i].y)) continue;
+    if (underIcon(eggs[i].x, eggs[i].y)) continue;
     if (inPaddle(eggs[i].x, eggs[i].y)) {
       const e = eggs[i];
       addSplat(e.x, e.y, now, e.seed, 0.35);
-      corpses.push({ kind: 'egg', x: e.x, y: e.y, nx: e.nx, ny: e.ny, nestKey: e.nestKey || null, rot: e.rot, seed: e.seed, ageMs: 0, wipes: 0, id: nextId++ });
+      corpses.push({ kind: 'egg', x: e.x, y: e.y, rot: e.rot, seed: e.seed, ageMs: 0, wipes: 0, id: nextId++ });
       eggs.splice(i, 1);
       hit = true;
     }
   }
   for (let i = larvae.length - 1; i >= 0; i--) {
-    if (nestHidden(larvae[i])) continue;
-    if (!larvae[i].nestKey && underIcon(larvae[i].x, larvae[i].y)) continue;
+    if (underIcon(larvae[i].x, larvae[i].y)) continue;
     if (inPaddle(larvae[i].x, larvae[i].y)) {
       const L = larvae[i];
       addSplat(L.x, L.y, now, L.seed, 0.45 + L.instar * 0.15);
-      corpses.push({ kind: 'larva', x: L.x, y: L.y, nx: L.nx, ny: L.ny, nestKey: L.nestKey || null, heading: L.heading, instar: L.instar, seed: L.seed, ageMs: 0, wipes: 0, id: nextId++ });
+      corpses.push({ kind: 'larva', x: L.x, y: L.y, heading: L.heading, instar: L.instar, seed: L.seed, ageMs: 0, wipes: 0, id: nextId++ });
       larvae.splice(i, 1);
       hit = true;
     }
   }
   for (let i = pupae.length - 1; i >= 0; i--) {
-    if (nestHidden(pupae[i])) continue;
-    if (!pupae[i].nestKey && underIcon(pupae[i].x, pupae[i].y)) continue;
+    if (underIcon(pupae[i].x, pupae[i].y)) continue;
     if (inPaddle(pupae[i].x, pupae[i].y)) {
       const p = pupae[i];
       addSplat(p.x, p.y, now, p.seed, 0.8);
-      corpses.push({ kind: 'pupa', x: p.x, y: p.y, nx: p.nx, ny: p.ny, nestKey: p.nestKey || null, rot: p.rot, seed: p.seed, ageMs: 0, wipes: 0, id: nextId++ });
+      corpses.push({ kind: 'pupa', x: p.x, y: p.y, rot: p.rot, seed: p.seed, ageMs: 0, wipes: 0, id: nextId++ });
       pupae.splice(i, 1);
       hit = true;
     }
@@ -3124,7 +2804,6 @@ function step(dt, now) {
   if (foodAcc > 4) {
     foodAcc = 0;
     spawnFood();
-    spawnNestFood();
   }
 
   const alive = flies.length + eggs.length + larvae.length + pupae.length;
@@ -3914,28 +3593,21 @@ function drawCodons() {
 }
 
 function draw(now) {
-  syncNestWorld();
   ctx.clearRect(0, 0, W, H);
   if (swatterOn || ragOn || netOn) {
     ctx.fillStyle = 'rgba(0,0,0,0.02)';
     ctx.fillRect(0, 0, W, H);
   }
-  for (const f of foods) if (!isNestUnit(f)) drawFood(f);
-  for (const e of eggs) if (!isNestUnit(e)) drawEgg(e);
-  for (const p of pupae) if (!isNestUnit(p)) drawPupa(p, now, false);
-  for (const L of larvae) if (!isNestUnit(L)) drawLarva(L);
-  for (const s of shells) if (!isNestUnit(s)) drawPupa(s, now, true);
+  for (const f of foods) drawFood(f);
+  for (const e of eggs) drawEgg(e);
+  for (const p of pupae) drawPupa(p, now, false);
+  for (const L of larvae) drawLarva(L);
+  for (const s of shells) drawPupa(s, now, true);
   punchIcons();
   for (const s of splats) drawSplat(s);
-  for (const c of corpses) if (!isNestUnit(c)) drawCorpse(c);
+  for (const c of corpses) drawCorpse(c);
   for (const f of flies) drawFly(f, now);
   if (showCodons) drawCodons();
-  for (const f of foods) if (isNestUnit(f) && !nestHidden(f)) drawFood(f);
-  for (const e of eggs) if (isNestUnit(e) && !nestHidden(e)) drawEgg(e);
-  for (const p of pupae) if (isNestUnit(p) && !nestHidden(p)) drawPupa(p, now, false);
-  for (const L of larvae) if (isNestUnit(L) && !nestHidden(L)) drawLarva(L);
-  for (const s of shells) if (isNestUnit(s) && !nestHidden(s)) drawPupa(s, now, true);
-  for (const c of corpses) if (isNestUnit(c) && !nestHidden(c)) drawCorpse(c);
   if (swatterOn) drawSwatter();
   if (ragOn) {
     drawRag();
@@ -3944,7 +3616,6 @@ function draw(now) {
   if (netOn || netSolidUntil) drawNet(now);
   drawBottle(now);
   drawFanfare(now);
-  publishNestPeek();
 }
 
 function drawFanfare(now) {
@@ -4288,8 +3959,6 @@ if (api) {
   });
   api.onIcons((d) => {
     icons = d.icons || [];
-    rememberNestAnchors();
-    spillMissingNests();
     const nearest = (x, y) => {
       let best = null;
       let bestD = 1e9;
@@ -4305,7 +3974,6 @@ if (api) {
       if (f.target) f.target = icons.find((i) => i.name === f.target.name) || f.target;
     }
     foods = foods.filter((f) => {
-      if (f.nestKey) return liveNestKeys().has(f.nestKey);
       if (f.infinite) return true;
       const ic = icons.find((i) => i.id === f.iconId) || nearest(f.x, f.y);
       if (!ic || ic.source === 'grid') return false;
@@ -4318,11 +3986,6 @@ if (api) {
     if (!booted && !holdBoot && icons.length) boot();
     syncBinFood();
   });
-  if (api.onExplorers) {
-    api.onExplorers((d) => {
-      explorers = (d && d.windows) || [];
-    });
-  }
   api.onSwatter((d) => {
     const was = swatterOn;
     swatterOn = !!d.on;

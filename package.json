@@ -32,7 +32,6 @@
       "main.js",
       "preload.mjs",
       "preload-panel.mjs",
-      "preload-nest.mjs",
       "package.json",
       "flavor.json",
       "renderer/**/*",
