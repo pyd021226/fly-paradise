@@ -6,12 +6,19 @@ const POINT = koffi.struct('POINT', {
   x: 'int32',
   y: 'int32',
 });
+const RECT = koffi.struct('RECT', {
+  left: 'int32',
+  top: 'int32',
+  right: 'int32',
+  bottom: 'int32',
+});
 
 const GetCursorPos = user32.func('bool __stdcall GetCursorPos(_Out_ POINT *lpPoint)');
 const WindowFromPoint = user32.func('void *__stdcall WindowFromPoint(POINT pt)');
 const GetAncestor = user32.func('void *__stdcall GetAncestor(void *hWnd, uint32 gaFlags)');
 const GetClassNameW = user32.func('int __stdcall GetClassNameW(void *hWnd, void *lpClassName, int nMaxCount)');
 const GetAsyncKeyState = user32.func('int16 __stdcall GetAsyncKeyState(int vKey)');
+const GetWindowRect = user32.func('bool __stdcall GetWindowRect(void *hWnd, _Out_ RECT *lpRect)');
 const SetWindowPos = user32.func(
   'bool __stdcall SetWindowPos(void *hWnd, void *hWndInsertAfter, int X, int Y, int cx, int cy, uint32 uFlags)',
 );
@@ -124,4 +131,19 @@ export function isRecycleBinName(name) {
   const s = String(name || '').trim().toLowerCase();
   if (!s) return false;
   return s === '回收站' || s === 'recycle bin' || s.includes('回收站') || s.includes('recycle bin');
+}
+
+export function windowRect(hwnd) {
+  const h = hwndVal(hwnd);
+  if (!h) return null;
+  const rc = {};
+  try {
+    if (!GetWindowRect(h, rc)) return null;
+  } catch {
+    return null;
+  }
+  const w = (rc.right || 0) - (rc.left || 0);
+  const ht = (rc.bottom || 0) - (rc.top || 0);
+  if (w < 80 || ht < 80) return null;
+  return { x: rc.left, y: rc.top, w, h };
 }

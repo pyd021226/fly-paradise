@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('fly', {
   onAmbient: (cb) => ipcRenderer.on('ambient', (_e, d) => cb(d)),
   onIcons: (cb) => ipcRenderer.on('icons', (_e, d) => cb(d)),
+  onExplorers: (cb) => ipcRenderer.on('explorers', (_e, d) => cb(d)),
   onCmd: (cb) => ipcRenderer.on('cmd', (_e, d) => cb(d)),
   onSwatter: (cb) => ipcRenderer.on('swatter', (_e, d) => cb(d)),
   onRag: (cb) => ipcRenderer.on('rag', (_e, d) => cb(d)),

@@ -6,11 +6,13 @@ import {
 } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { fetchLiveIcons } from './src/icons.js';
 import { fetchIconRects } from './src/icon-rects.js';
 import { startRawMouse, stopRawMouse } from './src/raw-mouse.js';
-import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs } from './src/desktop-layer.js';
+import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs, windowRect } from './src/desktop-layer.js';
+import { fetchExplorerWindows } from './src/explorer-windows.js';
 import * as flyApi from './server-client.js';
 import { asBlood, simulateClutch, whiteChance } from './src/sim-engine.mjs';
 
@@ -50,6 +52,7 @@ let fast = false;
 let watch = false;
 let mouseTimer = null;
 let iconTimer = null;
+let explorerTimer = null;
 let pinTimer = null;
 let clickTimer = null;
 
@@ -472,6 +475,19 @@ function rememberBin(list) {
   });
 }
 
+function desktopFolderPath(name) {
+  const n = String(name || '').trim();
+  if (!n || /\.lnk$/i.test(n)) return null;
+  const dirs = [path.join(os.homedir(), 'Desktop'), 'C:\\Users\\Public\\Desktop'];
+  for (const dir of dirs) {
+    const p = path.join(dir, n);
+    try {
+      if (fs.statSync(p).isDirectory()) return p.toLowerCase();
+    } catch { /* not a folder */ }
+  }
+  return null;
+}
+
 function decorateIcons(list, physical) {
   const binHas = recycleCached();
   return toOverlayIcons(list, physical).map((ic, i) => {
@@ -481,8 +497,32 @@ function decorateIcons(list, physical) {
     return {
       ...ic,
       recycleBin: !!(binHas && isBin),
+      binIcon: !!isBin,
+      folderPath: isBin ? null : desktopFolderPath(ic.name),
       lastLaunch: launches.get(ic.name) || launches.get(ic.id) || 0,
     };
+  });
+}
+
+function publishExplorers() {
+  if (!overlay || overlay.isDestroyed()) return;
+  fetchExplorerWindows().then((list) => {
+    if (!overlay || overlay.isDestroyed()) return;
+    const physical = [];
+    for (const w of list || []) {
+      const r = windowRect(w.hwnd);
+      if (!r) continue;
+      physical.push({
+        id: 'ex:' + w.hwnd,
+        name: w.path || w.url || '',
+        nestKey: w.nestKey,
+        x: r.x,
+        y: r.y,
+        w: r.w,
+        h: r.h,
+      });
+    }
+    send('explorers', { windows: toOverlayIcons(physical, true) });
   });
 }
 
@@ -628,6 +668,8 @@ if (!app.requestSingleInstanceLock()) {
       if (!overlay || overlay.isDestroyed()) return;
       mouseTimer = setInterval(pollMouse, 1000 / 30);
       iconTimer = setInterval(publishIcons, 400);
+      explorerTimer = setInterval(publishExplorers, 800);
+      publishExplorers();
       clickTimer = setInterval(() => {
         if (!toolOn()) trackDesktopClicks();
       }, 50);
@@ -808,6 +850,7 @@ app.on('before-quit', () => {
   globalShortcut.unregisterAll();
   clearInterval(mouseTimer);
   clearInterval(iconTimer);
+  clearInterval(explorerTimer);
   clearInterval(pinTimer);
   clearInterval(clickTimer);
 });
