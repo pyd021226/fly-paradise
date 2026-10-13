@@ -151,6 +151,18 @@
     body.annoy #openSim { display: none; }
     #toTray { display: none; }
     body.annoy #toTray { display: block; }
+    .box {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--btn);
+      padding: 10px 10px 2px;
+      margin: 0 0 12px;
+    }
+    .box .lab {
+      font-size: 12px;
+      color: var(--muted);
+      margin: 0 0 8px;
+    }
     #shop { padding: 10px 8px 12px; overflow: hidden; }
     .shop-grid {
       display: grid;
@@ -217,25 +229,31 @@
     <div class="stats" id="stats">成虫 0　卵 0　蛆 0/0/0　蛹 0<br><span class="m">褐色AaBb （1） 0</span><span class="m">中褐AaBB （2） 0</span><span class="m">深褐AABb （3） 0</span><span class="m">白色AABB （4） 0</span></div>
     <div class="stats" id="points">积分 0</div>
     <p class="note">打死一只 +1 积分</p>
-    <button id="officialMall" type="button">官方商城</button>
-    <div id="officialMallBox" class="stats" style="display:none">
-      <div>白果蝇（基因码11）　30积分 <button id="buyWhite" type="button">购买</button></div>
-      <div>清洁剂（让尸体更好擦）　30积分 <button id="buyCleaner" type="button">购买</button></div>
+    <div class="box">
+      <div class="lab">商店</div>
+      <button id="officialMall" type="button">官方商城</button>
+      <div id="officialMallBox" class="stats" style="display:none">
+        <div>白果蝇（基因码11）　30积分 <button id="buyWhite" type="button">购买</button></div>
+        <div>清洁剂（让尸体更好擦）　30积分 <button id="buyCleaner" type="button">购买</button></div>
+      </div>
+      <button id="openShop" type="button">交易市场</button>
     </div>
-    <button id="cleaner" type="button">拿出清洁剂</button>
-    <button id="openShop" type="button">打开交易市场</button>
-    <button id="xray" type="button">全图透视</button>
-    <button class="primary" id="swatter" type="button">拿出苍蝇拍</button>
-    <button id="rag" type="button">拿出抹布</button>
-    <button id="capture" type="button">捕捉</button>
-    <div id="captureSection">
-      <button id="net" type="button">拿出捕网</button>
-      <p class="note">瓶内待满 2 分钟会死亡，留下尸体。</p>
-      <p class="jar-msg" id="jarMsg"></p>
-      <input id="sellNote" type="text" placeholder="备注这是什么（写在图下）" maxlength="40">
-      <input id="sellPoints" type="number" min="0" step="1" placeholder="积分售价（可空，用积分交易）">
-      <div class="row"><button id="jarAll" type="button">瓶内全选</button><button id="jarSell" type="button">上架选中</button></div>
-      <button id="jarFree" type="button">放回选中</button>
+    <div class="box">
+      <div class="lab">工具</div>
+      <button id="xray" type="button">全图透视</button>
+      <button class="primary" id="swatter" type="button">拿出苍蝇拍</button>
+      <button id="rag" type="button">拿出抹布</button>
+      <button id="capture" type="button">捕捉</button>
+      <div id="captureSection">
+        <button id="net" type="button">拿出捕网</button>
+        <p class="note">瓶内待满 2 分钟会死亡，留下尸体。</p>
+        <p class="jar-msg" id="jarMsg"></p>
+        <input id="sellNote" type="text" placeholder="备注这是什么（写在图下）" maxlength="40">
+        <input id="sellPoints" type="number" min="0" step="1" placeholder="积分售价（可空，用积分交易）">
+        <div class="row"><button id="jarAll" type="button">瓶内全选</button><button id="jarSell" type="button">上架选中</button></div>
+        <button id="jarFree" type="button">放回选中</button>
+      </div>
+      <button id="cleaner" type="button">清洁剂</button>
     </div>
     <p class="note">按 Esc 退出</p>
     <div class="add-row">
@@ -243,7 +261,6 @@
       <label><input id="sexF" type="checkbox">雌</label>
       <label><input id="sexM" type="checkbox" checked>雄</label>
     </div>
-    <button id="scare" type="button">吓它们</button>
     <button id="codon" type="button">显示基因码</button>
     <button id="openSim" type="button">配种推演</button>
     <button id="fast" type="button">快进</button>

@@ -2911,18 +2911,49 @@ function drawFood(f) {
 }
 
 function drawSplat(s) {
-  const bits = s.bits && s.bits.length ? s.bits : splatBits(s.seed, s.scale || 1);
+  const t = dryAge(s) / DRY_MAX_MIN;
+  const oldCol = [74, 16, 32];
+  const newCol = [
+    74 + (58 - 74) * t,
+    16 + (40 - 16) * t,
+    32 + (18 - 32) * t,
+  ];
+  const mixed = [
+    (oldCol[0] + newCol[0]) * 0.5,
+    (oldCol[1] + newCol[1]) * 0.5,
+    (oldCol[2] + newCol[2]) * 0.5,
+  ];
+  const center = wipeMix(dryLighten(mixed, s), s);
+  const ring = wipeMix(dryDarken(mixed, s), s);
+  const midA = 0.72 + (0.6 - 0.72) * t;
   ctx.save();
   ctx.translate(s.x, s.y);
-  for (const b of bits) {
-    const r = b.r || ((Number(b.rx) || 4) + (Number(b.ry) || 4)) * 0.5;
-    const g = ctx.createRadialGradient(b.ox, b.oy, 0, b.ox, b.oy, r);
-    g.addColorStop(0, 'rgba(140, 58, 58, 0.72)');
-    g.addColorStop(0.45, 'rgba(96, 24, 36, 0.7)');
-    g.addColorStop(1, 'rgba(42, 8, 14, 0.58)');
-    ctx.fillStyle = g;
+  ctx.rotate(s.seed);
+  const k = s.scale || 1;
+  ctx.globalAlpha = midA;
+  ctx.fillStyle = center;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 10 * k, 6 * k, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(7 * k, -3 * k, 3 * k, 2 * k, 0.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = Math.min(0.9, midA + 0.18);
+  ctx.strokeStyle = ring;
+  ctx.lineWidth = 1.35 + t * 0.5;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 10 * k, 6 * k, 0.2, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(7 * k, -3 * k, 3 * k, 2 * k, 0.8, 0, Math.PI * 2);
+  ctx.stroke();
+  if (s.pigment) {
+    ctx.globalAlpha = midA * 0.55;
+    ctx.fillStyle = rgbStr(s.pigment);
+    const ox = ((s.seed || 1) % 5) - 2;
+    const oy = ((s.seed || 2) % 4) - 1.5;
     ctx.beginPath();
-    ctx.arc(b.ox, b.oy, r, 0, Math.PI * 2);
+    ctx.ellipse(ox * k, oy * k, 4.5 * k, 2.8 * k, 0.4, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
