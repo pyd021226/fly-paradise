@@ -6,11 +6,12 @@ import {
 } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { fetchLiveIcons } from './src/icons.js';
 import { fetchIconRects } from './src/icon-rects.js';
 import { startRawMouse, stopRawMouse } from './src/raw-mouse.js';
-import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs } from './src/desktop-layer.js';
+import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs, listCabinetWindows, adoptByExplorer } from './src/desktop-layer.js';
 import * as flyApi from './server-client.js';
 import { asBlood, simulateClutch, whiteChance } from './src/sim-engine.mjs';
 
@@ -41,6 +42,8 @@ let autoStart = isAnnoy;
 let overlay = null;
 let panel = null;
 let simWin = null;
+let nestWins = new Map();
+let lastNests = [];
 let swatterOn = false;
 let ragOn = false;
 let netOn = false;
@@ -50,6 +53,7 @@ let fast = false;
 let watch = false;
 let mouseTimer = null;
 let iconTimer = null;
+let nestTimer = null;
 let pinTimer = null;
 let clickTimer = null;
 
@@ -472,6 +476,19 @@ function rememberBin(list) {
   });
 }
 
+function desktopFolderPath(name) {
+  const n = String(name || '').trim();
+  if (!n || /\.lnk$/i.test(n)) return null;
+  const dirs = [path.join(os.homedir(), 'Desktop'), 'C:\\Users\\Public\\Desktop'];
+  for (const dir of dirs) {
+    const p = path.join(dir, n);
+    try {
+      if (fs.statSync(p).isDirectory()) return p.toLowerCase();
+    } catch { /* not a folder */ }
+  }
+  return null;
+}
+
 function decorateIcons(list, physical) {
   const binHas = recycleCached();
   return toOverlayIcons(list, physical).map((ic, i) => {
@@ -481,9 +498,70 @@ function decorateIcons(list, physical) {
     return {
       ...ic,
       recycleBin: !!(binHas && isBin),
+      binIcon: !!isBin,
+      folderPath: isBin ? null : desktopFolderPath(ic.name),
       lastLaunch: launches.get(ic.name) || launches.get(ic.id) || 0,
     };
   });
+}
+
+function closeNestWin(key) {
+  const w = nestWins.get(key);
+  if (w && !w.isDestroyed()) w.close();
+  nestWins.delete(key);
+}
+
+function ensureNestWin(key, hwndStr) {
+  let win = nestWins.get(key);
+  if (win && !win.isDestroyed()) return win;
+  win = new BrowserWindow({
+    width: 480,
+    height: 320,
+    frame: false,
+    transparent: true,
+    skipTaskbar: true,
+    focusable: false,
+    hasShadow: false,
+    show: false,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: path.join(HERE, 'preload-nest.mjs'),
+      sandbox: false,
+    },
+  });
+  win.setMenu(null);
+  win.setIgnoreMouseEvents(true, { forward: true });
+  win.loadFile(path.join(HERE, 'renderer', 'nest-peek.html'));
+  win.on('closed', () => { if (nestWins.get(key) === win) nestWins.delete(key); });
+  nestWins.set(key, win);
+  win.webContents.once('did-finish-load', () => {
+    if (win.isDestroyed()) return;
+    if (!adoptByExplorer(win, hwndStr)) {
+      closeNestWin(key);
+      return;
+    }
+    win.showInactive();
+  });
+  return win;
+}
+
+function syncNests(payload) {
+  lastNests = (payload && payload.nests) || lastNests;
+  const cabs = listCabinetWindows();
+  const live = new Set();
+  for (const nest of lastNests) {
+    if (!nest || !nest.units || !nest.units.length) continue;
+    const cab = cabs.find((c) => c.title === nest.name);
+    if (!cab) continue;
+    live.add(nest.key);
+    const win = ensureNestWin(nest.key, cab.hwnd);
+    if (win && !win.isDestroyed() && !win.webContents.isLoading()) {
+      win.webContents.send('nest-draw', { on: true, units: nest.units });
+    }
+  }
+  for (const key of [...nestWins.keys()]) {
+    if (!live.has(key)) closeNestWin(key);
+  }
 }
 
 function publishIcons() {
@@ -628,6 +706,7 @@ if (!app.requestSingleInstanceLock()) {
       if (!overlay || overlay.isDestroyed()) return;
       mouseTimer = setInterval(pollMouse, 1000 / 30);
       iconTimer = setInterval(publishIcons, 400);
+      nestTimer = setInterval(() => syncNests({ nests: lastNests }), 800);
       clickTimer = setInterval(() => {
         if (!toolOn()) trackDesktopClicks();
       }, 50);
@@ -640,6 +719,7 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('snapshot', (_e, data) => {
       if (data && data.breed) writeSave(data);
     });
+    ipcMain.on('nest-peek', (_e, data) => syncNests(data));
 
     ipcMain.on('fanfare', (_e, on) => {
       if (!overlay || overlay.isDestroyed()) return;
@@ -808,6 +888,11 @@ app.on('before-quit', () => {
   globalShortcut.unregisterAll();
   clearInterval(mouseTimer);
   clearInterval(iconTimer);
+  clearInterval(nestTimer);
+  for (const w of nestWins.values()) {
+    try { if (w && !w.isDestroyed()) w.close(); } catch { /* */ }
+  }
+  nestWins.clear();
   clearInterval(pinTimer);
   clearInterval(clickTimer);
 });
