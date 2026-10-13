@@ -489,9 +489,16 @@ function showLogin(msg) {
 function enterGuest() {
   document.body.classList.remove('need-login');
   document.body.classList.add('guest');
-  if ($('whoami')) $('whoami').textContent = '游客模式';
+  if ($('whoami')) $('whoami').textContent = '游客模式 · 可上架';
   if ($('logout')) $('logout').textContent = '登录账号';
   api.send('guest');
+  if (api.ensureGuest) {
+    api.ensureGuest().then((g) => {
+      if (g && g.ok && g.email && $('whoami')) {
+        $('whoami').textContent = '游客 · ' + g.email;
+      }
+    }).catch(() => {});
+  }
   loadShop();
   loadLeaderboard();
   loadPoints();

@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('panel', {
   signIn: (email, password) => ipcRenderer.invoke('fly-signin', { email, password }),
   signOut: () => ipcRenderer.invoke('fly-signout'),
   currentUser: () => ipcRenderer.invoke('fly-current-user'),
+  ensureGuest: () => ipcRenderer.invoke('fly-ensure-guest'),
   getLeaderboard: () => ipcRenderer.invoke('fly-leaderboard'),
   listListings: () => ipcRenderer.invoke('fly-list-listings'),
   unlistListing: (id) => ipcRenderer.invoke('fly-unlist-listing', { id }),

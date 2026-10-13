@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('fly', {
   signOut: () => ipcRenderer.invoke('fly-signout'),
   currentUser: () => ipcRenderer.invoke('fly-current-user'),
   spawnFly: () => ipcRenderer.invoke('fly-spawn'),
+  ensureGuest: () => ipcRenderer.invoke('fly-ensure-guest'),
   breed: (a, b, appendFrom) => ipcRenderer.invoke('fly-breed', { a, b, appendFrom }),
   submitRecord: (timeMs) => ipcRenderer.invoke('fly-submit-record', { timeMs }),
   submitMutation: (flyId) => ipcRenderer.invoke('fly-submit-mutation', { flyId }),

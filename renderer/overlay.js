@@ -2010,10 +2010,22 @@ async function sellSelectedJar(note, points) {
   if (listingBusy) { jarHint = '正在上架，别连点'; publishJar(); return; }
   const sel = [...jarSel];
   if (!sel.length) { jarHint = '先选中要上架的'; publishJar(); return; }
-  const units = sel.map((id) => jar.find((x) => x.id === id)).filter((u) => u && u.serverId);
+  const units = sel.map((id) => jar.find((x) => x.id === id)).filter(Boolean);
   if (!units.length) { jarHint = '该物品无法上架'; publishJar(); return; }
-  const kind = units[0].kind;
-  const group = units.filter((u) => u.kind === kind);
+  if (window.fly && window.fly.ensureGuest) {
+    const g = await window.fly.ensureGuest();
+    if (!g || !g.ok) { jarHint = '游客上架失败：' + ((g && g.error) || '未登录'); publishJar(); return; }
+  }
+  for (const u of units) {
+    if (u.serverId) continue;
+    if (!window.fly || !window.fly.spawnFly) { jarHint = '该物品无法上架'; publishJar(); return; }
+    const spawned = await window.fly.spawnFly();
+    if (spawned && spawned.ok && spawned.fly) u.serverId = spawned.fly.id;
+  }
+  const ready = units.filter((u) => u.serverId);
+  if (!ready.length) { jarHint = '游客上架失败：没有服务器编号'; publishJar(); return; }
+  const kind = ready[0].kind;
+  const group = ready.filter((u) => u.kind === kind);
   const limited = (kind === 'pupa' || kind === 'fly') ? group.slice(0, 1) : group.slice(0, 3);
   const flyIds = limited.map((u) => u.serverId);
   const price = Math.max(0, Math.floor(Number(points) || 0));

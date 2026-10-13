@@ -131,6 +131,32 @@ export async function signOut() {
   return { ok: true };
 }
 
+export async function ensureGuest() {
+  if (await ensureToken()) return { ok: true, email: sessionEmail || '游客' };
+  const id = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  const email = `guest.${id}@fly-paradise.test`;
+  const password = `Gg${id}A1!${id}`;
+  let res;
+  try {
+    res = await fetchTimeout(`${URL}/auth/v1/signup`, {
+      method: 'POST',
+      headers: { apikey: ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch (e) {
+    return { ok: false, error: e.timeout ? '游客注册超时' : (e.message || '游客上架失败') };
+  }
+  const data = await res.json().catch(() => ({}));
+  if (data.access_token) {
+    accessToken = data.access_token;
+    refreshToken = data.refresh_token || null;
+    sessionEmail = (data.user && data.user.email) || email;
+    saveSession();
+    return { ok: true, email: sessionEmail };
+  }
+  return signIn(email, password);
+}
+
 export async function currentUser() {
   const ok = await ensureToken();
   return ok ? { ok: true, email: sessionEmail } : { ok: false };
@@ -158,6 +184,10 @@ async function call(name, body) {
 }
 
 export async function spawnFly() {
+  if (!(await ensureToken())) {
+    const g = await ensureGuest();
+    if (!g.ok) return g;
+  }
   const r = await call('spawn-fly');
   return r.ok ? { ok: true, fly: r.data } : r;
 }
@@ -199,7 +229,10 @@ function authHeaders(extra) {
 }
 
 export async function createListing(kind, flyIds, note, want, instar, color) {
-  if (!(await ensureToken())) return { ok: false, error: '未登录' };
+  if (!(await ensureToken())) {
+    const g = await ensureGuest();
+    if (!g.ok) return { ok: false, error: g.error || '游客上架失败' };
+  }
   const me = tokenUser();
   if (!me) return { ok: false, error: '未登录' };
   const ids = Array.isArray(flyIds) ? flyIds.filter(Boolean) : [];

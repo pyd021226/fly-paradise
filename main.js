@@ -807,6 +807,7 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.handle('fly-signin', async (_e, arg) => flyApi.signIn(arg.email, arg.password));
     ipcMain.handle('fly-signout', async () => flyApi.signOut());
+    ipcMain.handle('fly-ensure-guest', async () => flyApi.ensureGuest());
     ipcMain.handle('fly-current-user', async () => flyApi.currentUser());
     ipcMain.handle('fly-spawn', async () => flyApi.spawnFly());
     ipcMain.handle('fly-breed', async (_e, arg) => flyApi.breed(arg.a, arg.b, arg.appendFrom));
