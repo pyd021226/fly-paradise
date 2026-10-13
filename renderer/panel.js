@@ -523,8 +523,80 @@ async function loadPoints() {
   }
 }
 
+let shopPoll = 0;
+const processedOffers = new Set();
+
+function openCapture() {
+  if (captureOpen) return;
+  captureOpen = true;
+  paintCapture();
+  api.send('capture', { open: true });
+}
+
+function restockOfferItems(ids, kind, color, tip) {
+  if (!ids || !ids.length) return;
+  openCapture();
+  api.send('jarRestock', { items: ids.map((fid) => ({ kind: kind || 'fly', serverId: fid, color: color || 'wild', codon: '', instar: 1 })) });
+  shopTip(tip);
+}
+
+function paintTradeDot(n) {
+  const btn = $('openShop');
+  if (btn) btn.classList.toggle('dot', n > 0);
+}
+
+function paintTradeInbox(pending, me) {
+  const box = $('tradeInbox');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!pending.length) return;
+  for (const o of pending) {
+    const listed = o.listings || {};
+    const row = document.createElement('div');
+    row.className = 'note';
+    row.style.marginBottom = '8px';
+    const who = (o.buyer_email || '').split('@')[0] || '买家';
+    row.textContent = who + ' 想用 ' + (o.kind || 'fly') + ' ×' + (o.quantity || 1) + ' 换「' + (listed.note || listed.kind || '你的货') + '」';
+    const acc = document.createElement('button');
+    acc.type = 'button';
+    acc.textContent = '同意';
+    acc.onclick = async () => {
+      if (!api.acceptOffer) return;
+      const res = await api.acceptOffer(o.id);
+      if (res && res.ok) {
+        const ids = (Array.isArray(o.fly_ids) && o.fly_ids.length) ? o.fly_ids : (o.fly_id ? [o.fly_id] : []);
+        restockOfferItems(ids, o.kind || 'fly', o.color || 'wild', '已同意，货进瓶子');
+        processedOffers.add(o.id + 'accepted');
+      } else {
+        shopTip('接受失败：' + ((res && res.error) || ''));
+      }
+      loadShop();
+    };
+    const rej = document.createElement('button');
+    rej.type = 'button';
+    rej.textContent = '拒绝';
+    rej.onclick = async () => {
+      if (!api.rejectOffer) return;
+      const res = await api.rejectOffer(o.id);
+      shopTip((res && res.ok) ? '已拒绝，货还在架上' : ('拒绝失败：' + ((res && res.error) || '')));
+      loadShop();
+    };
+    box.append(row, acc, rej);
+  }
+}
+
+async function myEmail() {
+  if (api.currentUser) {
+    try {
+      const u = await api.currentUser();
+      if (u && u.ok && u.email) return String(u.email);
+    } catch (e) { /* */ }
+  }
+  return ($('loginEmail') && $('loginEmail').value.trim()) || '';
+}
+
 async function loadShop() {
-  const me = ($('loginEmail') && $('loginEmail').value.trim()) || '';
+  const me = (await myEmail()).toLowerCase();
   let offers = [];
   try {
     if (api.listOffers) {
@@ -534,36 +606,40 @@ async function loadShop() {
   } catch (e) {
     offers = [];
   }
+  const pendingMine = offers.filter((o) => {
+    if (o.status !== 'pending') return false;
+    const listed = o.listings || {};
+    return (listed.seller_email || '').toLowerCase() === me;
+  });
+  paintTradeDot(pendingMine.length);
+  paintTradeInbox(pendingMine, me);
   for (const o of offers) {
-    if (o.status === 'accepted' && o.buyer_email === me && api.claimOffer) {
-      const listed = o.listings || {};
+    if (processedOffers.has(o.id + o.status)) continue;
+    const listed = o.listings || {};
+    const seller = (listed.seller_email || '').toLowerCase();
+    const buyer = (o.buyer_email || '').toLowerCase();
+    if (o.status === 'accepted' && buyer === me) {
       const ids = (Array.isArray(listed.fly_ids) && listed.fly_ids.length) ? listed.fly_ids : (listed.fly_id ? [listed.fly_id] : []);
-      if (ids.length) {
-        if (!captureOpen) {
-          captureOpen = true;
-          paintCapture();
-          api.send('capture', { open: true });
-        }
-        api.send('jarRestock', { items: ids.map((fid) => ({ kind: listed.kind || 'fly', serverId: fid, color: listed.color || 'wild', codon: '', instar: 1 })) });
-        shopTip('换到了东西，已进瓶子');
-      }
-      api.claimOffer(o.id);
+      restockOfferItems(ids, listed.kind || 'fly', listed.color || 'wild', '换到了东西，已进瓶子');
+      processedOffers.add(o.id + o.status);
     }
-    if (o.status === 'rejected' && o.buyer_email === me && api.claimOffer) {
+    if (o.status === 'accepted' && seller === me) {
       const ids = (Array.isArray(o.fly_ids) && o.fly_ids.length) ? o.fly_ids : (o.fly_id ? [o.fly_id] : []);
-      if (ids.length) {
-        if (!captureOpen) {
-          captureOpen = true;
-          paintCapture();
-          api.send('capture', { open: true });
-        }
-        api.send('jarRestock', { items: ids.map((fid) => ({ kind: o.kind || 'fly', serverId: fid, color: o.color || 'wild', codon: '', instar: 1 })) });
-        shopTip('报价被拒，东西已退回瓶子');
-      }
-      api.claimOffer(o.id);
+      restockOfferItems(ids, o.kind || 'fly', o.color || 'wild', '换到了东西，已进瓶子');
+      processedOffers.add(o.id + o.status);
+    }
+    if (o.status === 'rejected' && buyer === me) {
+      const ids = (Array.isArray(o.fly_ids) && o.fly_ids.length) ? o.fly_ids : (o.fly_id ? [o.fly_id] : []);
+      restockOfferItems(ids, o.kind || 'fly', o.color || 'wild', '报价被拒，东西已退回瓶子');
+      processedOffers.add(o.id + o.status);
+      if (api.claimOffer) api.claimOffer(o.id);
     }
   }
 }
+
+if (!shopPoll) shopPoll = setInterval(() => {
+  if (!document.body.classList.contains('need-login')) loadShop();
+}, 8000);
 
 async function loadLeaderboard() {
   if (!api.getLeaderboard) return;

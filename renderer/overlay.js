@@ -2098,7 +2098,7 @@ function restockJar(items) {
       instar: it.instar || 1,
     });
   }
-  jarHint = items && items.length ? '已下架回瓶' : '已下架';
+  jarHint = items && items.length ? '货已进瓶子' : '已下架';
   publishJar();
 }
 

@@ -149,6 +149,17 @@
     body.need-login #login { display: block; }
     body.need-login #game { display: none; }
     body.annoy #openSim { display: none; }
+    #openShop { position: relative; }
+    #openShop.dot::after {
+      content: "";
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #e23d7a;
+    }
     #toTray { display: none; }
     body.annoy #toTray { display: block; }
     .box {
@@ -237,6 +248,8 @@
         <div>清洁剂（让尸体更好擦）　30积分 <button id="buyCleaner" type="button">购买</button></div>
       </div>
       <button id="openShop" type="button">交易市场</button>
+      <p class="note" id="shopStatus"></p>
+      <div id="tradeInbox"></div>
     </div>
     <div class="box">
       <div class="lab">工具</div>

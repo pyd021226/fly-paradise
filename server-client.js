@@ -371,7 +371,7 @@ export async function listOffers() {
   if (!(await ensureToken())) return { ok: false, error: '未登录' };
   let res;
   try {
-    res = await fetchTimeout(`${URL}/rest/v1/offers?select=id,listing_id,buyer_id,buyer_email,kind,color,note,quantity,fly_id,fly_ids,status,created_at,listings(kind,color,fly_id,fly_ids,note)&status=in.(pending,accepted)&order=created_at.desc&limit=50`, {
+    res = await fetchTimeout(`${URL}/rest/v1/offers?select=id,listing_id,buyer_id,buyer_email,kind,color,note,quantity,fly_id,fly_ids,status,created_at,listings(kind,color,fly_id,fly_ids,note,seller_id,seller_email)&status=in.(pending,accepted,rejected)&order=created_at.desc&limit=50`, {
       headers: authHeaders(),
     });
   } catch (e) {
