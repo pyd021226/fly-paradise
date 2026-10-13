@@ -134,7 +134,7 @@ export async function signOut() {
 export async function ensureGuest() {
   if (await ensureToken()) return { ok: true, email: sessionEmail || '游客' };
   const id = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-  const email = `guest.${id}@fly-paradise.test`;
+  const email = `guest.${id}@gmail.com`;
   const password = `Gg${id}A1!${id}`;
   let res;
   try {
