@@ -61,12 +61,10 @@
       <div class="grid" id="gridBids"></div>
     </div>
     <div id="paneMall" class="pane">
+      <p class="sub">积分商品请在游戏面板购买：白果蝇 11（30积分）、清洁剂（30积分）。打死一只果蝇 +1 积分。</p>
       <div class="cats" id="cats"></div>
       <input id="q" type="search" placeholder="搜索备注、卖家、种类">
       <div class="grid" id="gridMall"></div>
-      <p class="sub" style="margin-top:20px">勾选要拿去换的，可写备注，再点卡片上的「用勾选报价」。</p>
-      <input id="bidNote" type="text" placeholder="报价备注（对方能看见）" maxlength="40">
-      <div id="flies"></div>
     </div>
   </div>
   <div id="cover">
@@ -301,33 +299,6 @@
         } catch (e) { tip("下架失败：" + e.message); }
       };
       row.appendChild(u);
-    } else {
-      const mineBids = allOffers.filter((o) => o.status === "pending" && o.listing_id === l.id && (o.buyer_email === email || o.buyer_id === uid));
-      const bid = document.createElement("button");
-      bid.className = "off";
-      if (mineBids.length) {
-        bid.textContent = "报价中";
-        bid.onclick = (e) => { e.preventDefault(); openCover(l, mineBids); };
-      } else {
-        bid.textContent = "用勾选报价";
-        bid.onclick = async () => {
-          const ids = [...document.querySelectorAll("#flies input:checked")].map((x) => x.value);
-          if (!ids.length) { tip("先在下方勾选要拿去换的果蝇"); return; }
-          try {
-            await req("/rest/v1/offers", {
-              method: "POST",
-              headers: headers({ Prefer: "return=minimal" }),
-              body: JSON.stringify({
-                listing_id: l.id, buyer_id: uid, buyer_email: email,
-                kind: "fly", fly_id: ids[0], fly_ids: ids.slice(0, 3), quantity: Math.min(3, ids.length),
-                color: "wild", note: (document.getElementById("bidNote").value || "").trim(), status: "pending",
-              }),
-            });
-            tip("已报价"); await refresh();
-          } catch (e) { tip("报价失败：" + e.message); }
-        };
-      }
-      row.appendChild(bid);
     }
     return card;
   }
@@ -385,7 +356,7 @@
 
   function render() {
     const mine = listings.filter(isMine);
-    const mall = listings.filter((l) => !isMine(l) && matchCat(l) && matchQ(l));
+    const mall = listings.filter((l) => !isMine(l) && matchCat(l) && matchQ(l) && String(l.note || "").indexOf("模拟") !== 0);
     const inbox = allOffers.filter((o) => o.status === "pending" && mine.some((l) => l.id === o.listing_id));
     const bids = allOffers.filter((o) => o.status === "pending" && (o.buyer_email === email || o.buyer_id === uid));
     const gi = document.getElementById("gridInbox");
@@ -429,25 +400,6 @@
     } catch (e) { offers = []; }
     allOffers = offers || [];
     render();
-    try {
-      const flies = await req("/rest/v1/flies?select=id,color,level&limit=40");
-      const box = document.getElementById("flies");
-      box.innerHTML = "";
-      const busy = busyFlyIds();
-      const free = (flies || []).filter((f) => !busy.has(f.id));
-      for (const f of free) {
-        const row = document.createElement("label");
-        row.className = "fly";
-        row.innerHTML = "<input type='checkbox'><span></span>";
-        row.querySelector("input").value = f.id;
-        row.querySelector("span").textContent = (f.color || "wild") + " · " + f.id.slice(0, 8);
-        box.appendChild(row);
-      }
-      if (!flies.length) box.textContent = "服务器上还没有你的果蝇。先在游戏里养。";
-      else if (!free.length) box.textContent = "可用的都在报价中。点商品上的「报价中」可撤回。";
-    } catch (e) {
-      document.getElementById("flies").textContent = "读不到果蝇：" + e.message;
-    }
   }
 
   async function login() {

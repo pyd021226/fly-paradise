@@ -45,6 +45,7 @@ let simWin = null;
 let swatterOn = false;
 let ragOn = false;
 let netOn = false;
+let cleanerOn = false;
 let captureOpen = false;
 let paused = false;
 let fast = false;
@@ -73,7 +74,7 @@ function send(channel, payload) {
 function publishState() {
   if (panel && !panel.isDestroyed()) {
     panel.webContents.send('state', {
-      swatterOn, ragOn, netOn, paused, fast, watch, breed, gate, autoStart, annoy: isAnnoy,
+      swatterOn, ragOn, netOn, cleanerOn, paused, fast, watch, breed, gate, autoStart, annoy: isAnnoy,
     });
   }
 }
@@ -85,7 +86,7 @@ function raisePanelOverOverlay() {
 }
 
 function toolOn() {
-  return swatterOn || ragOn || netOn;
+  return swatterOn || ragOn || netOn || cleanerOn;
 }
 
 function putAwaySwatter() {
@@ -93,6 +94,7 @@ function putAwaySwatter() {
   swatterOn = false;
   ragOn = false;
   netOn = false;
+  cleanerOn = false;
   applyTool();
 }
 
@@ -199,6 +201,7 @@ function applyTool() {
   send('swatter', { on: swatterOn, raw: swatterOn && raw });
   send('rag', { on: ragOn, raw: ragOn && raw });
   send('net', { on: netOn, raw: netOn && raw });
+  send('cmd', { name: 'cleaner', value: cleanerOn });
   publishState();
   if (!on) {
     bottlePrev = false;
@@ -719,16 +722,25 @@ if (!app.requestSingleInstanceLock()) {
       const name = msg?.name;
       if (name === 'swatter') {
         swatterOn = !swatterOn;
-        if (swatterOn) { ragOn = false; netOn = false; }
+        if (swatterOn) { ragOn = false; netOn = false; cleanerOn = false; }
         applyTool();
       } else if (name === 'rag') {
         ragOn = !ragOn;
-        if (ragOn) { swatterOn = false; netOn = false; }
+        if (ragOn) { swatterOn = false; netOn = false; cleanerOn = false; }
         applyTool();
       } else if (name === 'net') {
         netOn = !netOn;
-        if (netOn) { swatterOn = false; ragOn = false; }
+        if (netOn) { swatterOn = false; ragOn = false; cleanerOn = false; }
         applyTool();
+      } else if (name === 'cleaner') {
+        cleanerOn = !cleanerOn;
+        if (cleanerOn) { swatterOn = false; ragOn = false; netOn = false; }
+        applyTool();
+        send('cmd', { name: 'cleaner', value: cleanerOn });
+      } else if (name === 'buyWhite') {
+        send('cmd', { name: 'buyWhite' });
+      } else if (name === 'buyCleaner') {
+        send('cmd', { name: 'buyCleaner' });
       } else if (name === 'jarKill' || name === 'jarFree') {
         send('cmd', { name, id: msg.id });
       } else if (name === 'jarSelectAll' || name === 'jarFreeSel') {

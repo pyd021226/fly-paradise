@@ -80,6 +80,7 @@ function dryT(stain) {
 }
 
 function wipesNeed(stain) {
+  if (!stain || !stain.hard) return 1;
   return 1 + dryMin(stain);
 }
 
@@ -201,6 +202,9 @@ let icons = [];
 let mouse = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, spd: 0 };
 let swatterOn = false;
 let ragOn = false;
+let cleanerOn = false;
+let cleanerLeft = 0;
+let localPoints = 0;
 let netOn = false;
 let ragWipe = false;
 let ragHit = new Set();
@@ -1556,7 +1560,7 @@ audKill.addEventListener('ended', () => {
   audSwatter.play().catch(() => {});
 });
 
-function flyCorpse(fly) {
+function flyCorpse(fly, hard) {
   return {
     id: nextId++,
     kind: 'fly',
@@ -1571,26 +1575,100 @@ function flyCorpse(fly) {
     codon: fly.codon || '',
     ageMs: 0,
     wipes: 0,
+    hard: !!hard,
   };
+}
+
+function splatBits(seed, scale) {
+  const s = Number(seed) || 1;
+  const k = scale || 1;
+  const n = 4 + (Math.abs(Math.floor(s * 10)) % 5);
+  const bits = [];
+  for (let i = 0; i < n; i++) {
+    const a = s * 2.1 + i * 1.37;
+    const dist = (2 + ((s * 17 + i * 13) % 11)) * k;
+    bits.push({
+      ox: Math.sin(a) * dist,
+      oy: Math.cos(a * 0.83) * dist * 0.7,
+      rx: (1.6 + ((s * 9 + i * 7) % 8) * 0.55) * k,
+      ry: (1.0 + ((s * 5 + i * 11) % 6) * 0.4) * k,
+      rot: a * 0.4,
+    });
+  }
+  const drips = 1 + (Math.abs(Math.floor(s * 8)) % 3);
+  for (let i = 0; i < drips; i++) {
+    const a = s + i * 0.9;
+    bits.push({
+      ox: Math.sin(a) * 2 * k,
+      oy: (6 + i * 3.5 + ((s * 3) % 4)) * k,
+      rx: (0.7 + (i % 2) * 0.4) * k,
+      ry: (1.8 + i * 0.8) * k,
+      rot: 0.1 * i,
+    });
+  }
+  return bits;
 }
 
 function killFly(fly, now) {
   fly.state = 'dead';
-  addSplat(fly.x, fly.y, now, fly.seed, 1);
-  corpses.push(flyCorpse(fly));
+  addSplat(fly.x, fly.y, now, fly.seed, 1, true);
+  corpses.push(flyCorpse(fly, true));
   playKillMusic();
-  if (breed && window.fly && window.fly.addPoint) window.fly.addPoint(1);
+  localPoints += 1;
+  if (window.fly && window.fly.addPoint) window.fly.addPoint(1);
 }
 
-function addSplat(x, y, now, seed, scale) {
+function addSplat(x, y, now, seed, scale, hard) {
+  const sd = seed || rand(0, 99);
   splats.push({
     id: nextId++,
     x, y, t: now,
-    seed: seed || rand(0, 10),
+    seed: sd,
     scale: scale || 1,
     ageMs: 0,
     wipes: 0,
+    hard: !!hard,
+    bits: splatBits(sd, scale || 1),
   });
+}
+
+function sprayCleaner(x, y) {
+  if (cleanerLeft <= 0) return;
+  cleanerLeft -= 1;
+  const r2 = NET_R * NET_R;
+  const soften = (s) => {
+    if (!s) return;
+    const dx = (s.x || 0) - x;
+    const dy = (s.y || 0) - y;
+    if (dx * dx + dy * dy > r2) return;
+    s.hard = false;
+    s.ageMs = 0;
+  };
+  for (const s of splats) soften(s);
+  for (const c of corpses) soften(c);
+  for (const s of shells) soften(s);
+  if (cleanerLeft <= 0) cleanerOn = false;
+}
+
+function buyWhiteFly() {
+  if (localPoints < 30) return false;
+  localPoints -= 30;
+  const f = spawnFly(W * 0.5, H * 0.35, {
+    color: 'white',
+    codon: '11',
+    gene_d: 2,
+    gene_p: 2,
+    sex: Math.random() < 0.5 ? 'm' : 'f',
+  });
+  if (f) f.needMeal = true;
+  return true;
+}
+
+function buyCleaner() {
+  if (localPoints < 30) return false;
+  localPoints -= 30;
+  cleanerLeft += 10;
+  return true;
 }
 
 function beginPair(a, b, now) {
@@ -2732,8 +2810,8 @@ function swatAt(now) {
     if (underIcon(eggs[i].x, eggs[i].y)) continue;
     if (inPaddle(eggs[i].x, eggs[i].y)) {
       const e = eggs[i];
-      addSplat(e.x, e.y, now, e.seed, 0.35);
-      corpses.push({ kind: 'egg', x: e.x, y: e.y, rot: e.rot, seed: e.seed, ageMs: 0, wipes: 0, id: nextId++ });
+      addSplat(e.x, e.y, now, e.seed, 0.35, true);
+      corpses.push({ kind: 'egg', x: e.x, y: e.y, rot: e.rot, seed: e.seed, ageMs: 0, wipes: 0, hard: true, id: nextId++ });
       eggs.splice(i, 1);
       hit = true;
     }
@@ -2742,8 +2820,8 @@ function swatAt(now) {
     if (underIcon(larvae[i].x, larvae[i].y)) continue;
     if (inPaddle(larvae[i].x, larvae[i].y)) {
       const L = larvae[i];
-      addSplat(L.x, L.y, now, L.seed, 0.45 + L.instar * 0.15);
-      corpses.push({ kind: 'larva', x: L.x, y: L.y, heading: L.heading, instar: L.instar, seed: L.seed, ageMs: 0, wipes: 0, id: nextId++ });
+      addSplat(L.x, L.y, now, L.seed, 0.45 + L.instar * 0.15, true);
+      corpses.push({ kind: 'larva', x: L.x, y: L.y, heading: L.heading, instar: L.instar, seed: L.seed, ageMs: 0, wipes: 0, hard: true, id: nextId++ });
       larvae.splice(i, 1);
       hit = true;
     }
@@ -2752,8 +2830,8 @@ function swatAt(now) {
     if (underIcon(pupae[i].x, pupae[i].y)) continue;
     if (inPaddle(pupae[i].x, pupae[i].y)) {
       const p = pupae[i];
-      addSplat(p.x, p.y, now, p.seed, 0.8);
-      corpses.push({ kind: 'pupa', x: p.x, y: p.y, rot: p.rot, seed: p.seed, ageMs: 0, wipes: 0, id: nextId++ });
+      addSplat(p.x, p.y, now, p.seed, 0.8, true);
+      corpses.push({ kind: 'pupa', x: p.x, y: p.y, rot: p.rot, seed: p.seed, ageMs: 0, wipes: 0, hard: true, id: nextId++ });
       pupae.splice(i, 1);
       hit = true;
     }
@@ -2844,48 +2922,27 @@ function drawFood(f) {
 
 function drawSplat(s) {
   const t = dryAge(s) / DRY_MAX_MIN;
-  const oldCol = [74, 16, 32];
-  const newCol = [
-    74 + (58 - 74) * t,
-    16 + (40 - 16) * t,
-    32 + (18 - 32) * t,
-  ];
-  const mixed = [
-    (oldCol[0] + newCol[0]) * 0.5,
-    (oldCol[1] + newCol[1]) * 0.5,
-    (oldCol[2] + newCol[2]) * 0.5,
-  ];
-  const center = wipeMix(dryLighten(mixed, s), s);
-  const ring = wipeMix(dryDarken(mixed, s), s);
-  const midA = 0.72 + (0.6 - 0.72) * t;
+  const col = wipeMix(dryDarken([74, 16, 32], s), s);
+  const midA = 0.78 - t * 0.18;
+  const bits = s.bits && s.bits.length ? s.bits : splatBits(s.seed, s.scale || 1);
   ctx.save();
   ctx.translate(s.x, s.y);
-  ctx.rotate(s.seed);
-  const k = s.scale || 1;
   ctx.globalAlpha = midA;
-  ctx.fillStyle = center;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 10 * k, 6 * k, 0.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(7 * k, -3 * k, 3 * k, 2 * k, 0.8, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = Math.min(0.9, midA + 0.18);
-  ctx.strokeStyle = ring;
-  ctx.lineWidth = 1.35 + t * 0.5;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 10 * k, 6 * k, 0.2, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(7 * k, -3 * k, 3 * k, 2 * k, 0.8, 0, Math.PI * 2);
-  ctx.stroke();
-  if (s.pigment) {
-    ctx.globalAlpha = midA * 0.55;
-    ctx.fillStyle = rgbStr(s.pigment);
-    const ox = ((s.seed || 1) % 5) - 2;
-    const oy = ((s.seed || 2) % 4) - 1.5;
+  ctx.fillStyle = col;
+  for (const b of bits) {
+    ctx.save();
+    ctx.translate(b.ox, b.oy);
+    ctx.rotate(b.rot || 0);
     ctx.beginPath();
-    ctx.ellipse(ox * k, oy * k, 4.5 * k, 2.8 * k, 0.4, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, b.rx, b.ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  if (s.pigment) {
+    ctx.globalAlpha = midA * 0.4;
+    ctx.fillStyle = rgbStr(s.pigment);
+    ctx.beginPath();
+    ctx.ellipse(bits[0] ? bits[0].ox : 0, bits[0] ? bits[0].oy : 0, 3.2 * (s.scale || 1), 2.1 * (s.scale || 1), 0.3, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
@@ -3732,6 +3789,8 @@ function publishLife() {
     breedMs,
     washLeftMs,
     ragUses,
+    points: localPoints,
+    cleanerLeft,
   });
 }
 
@@ -3914,6 +3973,7 @@ addEventListener('pointerdown', (e) => {
 canvas.addEventListener('mousedown', (e) => {
   trackTool(e.clientX, e.clientY);
   if (netOn) { throwNet(performance.now()); return; }
+  if (cleanerOn) { sprayCleaner(mouse.x, mouse.y); return; }
   if (swatterOn) swatAt(performance.now());
   if (ragOn) {
     ragWipe = true;
@@ -4061,6 +4121,9 @@ if (api) {
     }
     if (d.name === 'scareAll') scareAll(performance.now());
     if (d.name === 'codonShow') showCodons = !showCodons;
+    if (d.name === 'buyWhite') buyWhiteFly();
+    if (d.name === 'buyCleaner') buyCleaner();
+    if (d.name === 'cleaner') cleanerOn = !!d.value;
     if (d.name === 'loggedIn') spawnServerFlies();
     if (d.name === 'guest') {
       holdBoot = false;

@@ -87,8 +87,8 @@ function render(s) {
   } else if (rag) {
     const wash = ragWashHint(lastLife);
     $('hint').textContent = wash || '抹布跟着鼠标。按住拖动能擦掉汁、尸体和空蛹壳。Esc 收起。';
-  } else if (net) {
-    $('hint').textContent = '捕网跟着鼠标，不惊动。点击后 0.2 秒落下，圈里活物进瓶。Esc 收起。';
+  } else if (s.cleanerOn) {
+    $('hint').textContent = '清洁剂：点击喷一下，范围同捕网。把打死的血迹/尸体变回一下能擦掉。Esc 收起。';
   } else if (fast) {
     $('hint').textContent = '快进：成熟、进食、交配、卵、蛹大约 1.5 秒。';
   } else if (watch) {
@@ -115,6 +115,9 @@ $('rag').onclick = () => {
   if (ragWashing()) api.send('wash');
   else api.send('rag');
 };
+if ($('cleaner')) $('cleaner').onclick = () => api.send('cleaner');
+if ($('buyWhite')) $('buyWhite').onclick = () => api.send('buyWhite');
+if ($('buyCleaner')) $('buyCleaner').onclick = () => api.send('buyCleaner');
 $('net').onclick = () => api.send('net');
 let captureOpen = false;
 function paintCapture() {
@@ -189,6 +192,13 @@ if (api.onLife) {
       line += `<br>${last.cleared ? '通关' : '计时'} ${fmtMs(last.breedMs)}`;
     }
     el.innerHTML = line;
+    if ($('points') && last.points != null) $('points').textContent = '积分 ' + (last.points || 0);
+    if ($('cleaner')) {
+      const n = last.cleanerLeft || 0;
+      $('cleaner').textContent = lastState.cleanerOn ? ('收起清洁剂 · 余' + n) : ('拿出清洁剂 · 余' + n);
+      $('cleaner').classList.toggle('on', !!lastState.cleanerOn);
+      $('cleaner').disabled = n <= 0 && !lastState.cleanerOn;
+    }
     paintRagBtn(!!lastState.ragOn);
     const wash = ragWashHint(last);
     if (wash) $('hint').textContent = wash;
