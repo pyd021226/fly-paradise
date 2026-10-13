@@ -185,18 +185,17 @@ if (api.onLife) {
     const el = $('stats');
     if (!el) return;
     let line = `成虫 ${last.adults || 0}（${sexn(last.adultF, last.adultM)}）　卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}`;
-    line += `<span class="m">褐色 ${sexn(last.wildF, last.wildM)}</span>`;
-    line += `<span class="m">中褐 ${sexn(last.midF, last.midM)}</span>`;
-    line += `<span class="m">深褐 ${sexn(last.deepF, last.deepM)}</span>`;
-    line += `<span class="m">白色 ${sexn(last.whiteF, last.whiteM)}</span>`;
-    if (last.green) line += `<span class="m">绿色 ${sexn(last.greenF, last.greenM)}</span>`;
-    if (last.green2) line += `<span class="m">亮绿 ${sexn(last.green2F, last.green2M)}</span>`;
-    if (last.red) line += `<span class="m">红色 ${sexn(last.redF, last.redM)}</span>`;
-    if (last.red2) line += `<span class="m">亮红 ${sexn(last.red2F, last.red2M)}</span>`;
-    if (last.yellow) line += `<span class="m">黄色 ${sexn(last.yellowF, last.yellowM)}</span>`;
-    if (last.yellow2) line += `<span class="m">亮黄 ${sexn(last.yellow2F, last.yellow2M)}</span>`;
+    line += `<span class="m">褐色AaBb （1） ${sexn(last.wildF, last.wildM)}</span>`;
+    line += `<span class="m">中褐AaBB （2） ${sexn(last.midF, last.midM)}</span>`;
+    line += `<span class="m">深褐AABb （3） ${sexn(last.deepF, last.deepM)}</span>`;
+    line += `<span class="m">白色AABB （4） ${sexn(last.whiteF, last.whiteM)}</span>`;
+    if (last.green) line += `<span class="m">绿色1124 ${sexn(last.greenF, last.greenM)}</span>`;
+    if (last.green2) line += `<span class="m">亮绿1124 ${sexn(last.green2F, last.green2M)}</span>`;
+    if (last.red) line += `<span class="m">红色1123 ${sexn(last.redF, last.redM)}</span>`;
+    if (last.red2) line += `<span class="m">亮红1123 ${sexn(last.red2F, last.red2M)}</span>`;
+    if (last.yellow) line += `<span class="m">黄色1122 ${sexn(last.yellowF, last.yellowM)}</span>`;
+    if (last.yellow2) line += `<span class="m">亮黄1122 ${sexn(last.yellow2F, last.yellow2M)}</span>`;
     if (last.mut) line += `<span class="m">更高突变 ${sexn(last.mutF, last.mutM)}</span>`;
-    if (isAnnoy) line += `<span class="m">绿峰值 ${last.greenPeak || 0}</span>`;
     if (last.breed) {
       line += `<br>${last.cleared ? '通关' : '计时'} ${fmtMs(last.breedMs)}`;
     }

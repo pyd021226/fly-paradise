@@ -699,22 +699,13 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('swatter-off', putAwaySwatter);
 
     ipcMain.on('life-stats', (_e, s) => {
-      if (isAnnoy) {
-        const g = Number(s && s.green) || 0;
-        if (g > greenPeak) {
-          greenPeak = g;
-          try { fs.writeFileSync(STATS_FILE, JSON.stringify({ greenPeak })); } catch { /* */ }
-        }
-      }
       if (panel && !panel.isDestroyed()) {
-        panel.webContents.send('life-stats', isAnnoy ? { ...s, greenPeak } : { ...s, greenPeak: 0 });
+        panel.webContents.send('life-stats', s || {});
       }
     });
 
     ipcMain.on('panel-ready', () => {
       publishState();
-      if (panel && !panel.isDestroyed()) {
-        panel.webContents.send('life-stats', isAnnoy ? { greenPeak } : { greenPeak: 0 });
       }
     });
 
