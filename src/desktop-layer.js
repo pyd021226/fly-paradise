@@ -6,24 +6,12 @@ const POINT = koffi.struct('POINT', {
   x: 'int32',
   y: 'int32',
 });
-const RECT = koffi.struct('RECT', {
-  left: 'int32',
-  top: 'int32',
-  right: 'int32',
-  bottom: 'int32',
-});
 
 const GetCursorPos = user32.func('bool __stdcall GetCursorPos(_Out_ POINT *lpPoint)');
 const WindowFromPoint = user32.func('void *__stdcall WindowFromPoint(POINT pt)');
 const GetAncestor = user32.func('void *__stdcall GetAncestor(void *hWnd, uint32 gaFlags)');
 const GetClassNameW = user32.func('int __stdcall GetClassNameW(void *hWnd, void *lpClassName, int nMaxCount)');
 const GetAsyncKeyState = user32.func('int16 __stdcall GetAsyncKeyState(int vKey)');
-const GetWindowRect = user32.func('bool __stdcall GetWindowRect(void *hWnd, _Out_ RECT *lpRect)');
-const GetWindowTextW = user32.func('int __stdcall GetWindowTextW(void *hWnd, void *lpString, int nMaxCount)');
-const IsWindowVisible = user32.func('bool __stdcall IsWindowVisible(void *hWnd)');
-const SetParent = user32.func('void *__stdcall SetParent(void *hWndChild, void *hWndNewParent)');
-const WNDENUMPROC = koffi.proto('bool __stdcall WNDENUMPROC(void *hWnd, intptr lParam)');
-const EnumWindows = user32.func('bool __stdcall EnumWindows(WNDENUMPROC *lpEnumFunc, intptr lParam)');
 const SetWindowPos = user32.func(
   'bool __stdcall SetWindowPos(void *hWnd, void *hWndInsertAfter, int X, int Y, int cx, int cy, uint32 uFlags)',
 );
@@ -33,7 +21,6 @@ const HWND_BOTTOM = 1;
 const SWP_NOSIZE = 0x0001;
 const SWP_NOMOVE = 0x0002;
 const SWP_NOACTIVATE = 0x0010;
-const SWP_SHOWWINDOW = 0x0040;
 const SWP_PIN = SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE;
 
 const DESKTOP = new Set([
@@ -137,48 +124,4 @@ export function isRecycleBinName(name) {
   const s = String(name || '').trim().toLowerCase();
   if (!s) return false;
   return s === '回收站' || s === 'recycle bin' || s.includes('回收站') || s.includes('recycle bin');
-}
-
-function windowTitle(hwnd) {
-  if (!hwndVal(hwnd)) return '';
-  const buf = Buffer.alloc(1024);
-  const n = GetWindowTextW(hwnd, buf, 512);
-  if (!n) return '';
-  return buf.toString('utf16le', 0, n * 2);
-}
-
-export function folderWindowTitle(title) {
-  return String(title || '').replace(/\s*[-–—]\s*(文件资源管理器|File Explorer|Windows Explorer)\s*$/i, '').trim();
-}
-
-export function listCabinetWindows() {
-  const out = [];
-  try {
-    EnumWindows((hwnd) => {
-      try {
-        if (!IsWindowVisible(hwnd)) return true;
-        const cls = className(hwnd);
-        if (cls !== 'CabinetWClass' && cls !== 'ExploreWClass') return true;
-        const title = windowTitle(hwnd);
-        if (!title) return true;
-        out.push({ hwnd: String(hwndVal(hwnd)), title: folderWindowTitle(title) });
-      } catch { /* skip */ }
-      return true;
-    }, 0);
-  } catch { /* enum failed */ }
-  return out;
-}
-
-export function adoptByExplorer(childWin, parentHwndStr) {
-  const child = nativeHwnd(childWin);
-  let parent;
-  try { parent = BigInt(parentHwndStr); } catch { return false; }
-  if (!child || !parent) return false;
-  try {
-    SetParent(child, parent);
-    SetWindowPos(child, null, 20, 96, 480, 320, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    return true;
-  } catch {
-    return false;
-  }
 }
