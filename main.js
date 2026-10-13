@@ -706,7 +706,6 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.on('panel-ready', () => {
       publishState();
-      }
     });
 
     ipcMain.on('panel', (_e, msg) => {
