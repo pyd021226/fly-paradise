@@ -154,6 +154,7 @@ $('logout').onclick = async () => {
   forceLogin = true;
   showLogin();
 };
+if ($('toTray')) $('toTray').onclick = () => api.send('toTray');
 $('quit').onclick = () => api.send('quit');
 
 addEventListener('keydown', (e) => {

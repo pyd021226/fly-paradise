@@ -2,7 +2,7 @@
 // Overlay spans the virtual desktop; the panel is the app the user opens.
 
 import {
-  app, BrowserWindow, screen, globalShortcut, ipcMain, shell,
+  app, BrowserWindow, screen, globalShortcut, ipcMain, shell, Tray, Menu,
 } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -40,6 +40,7 @@ let autoStart = isAnnoy;
 
 let overlay = null;
 let panel = null;
+let tray = null;
 let simWin = null;
 let swatterOn = false;
 let ragOn = false;
@@ -129,6 +130,10 @@ function clearSave() {
 
 function quitApp() {
   app.isQuitting = true;
+  if (tray) {
+    try { tray.destroy(); } catch { /* */ }
+    tray = null;
+  }
   send('cmd', { name: 'flush' });
   setTimeout(() => app.quit(), 400);
 }
@@ -247,6 +252,31 @@ function createOverlay(b) {
   return win;
 }
 
+function hideToTray() {
+  if (!isAnnoy || !panel || panel.isDestroyed()) return;
+  panel.hide();
+  panel.setSkipTaskbar(true);
+  ensureTray();
+}
+
+function showFromTray() {
+  if (!panel || panel.isDestroyed()) return;
+  panel.setSkipTaskbar(false);
+  panel.show();
+  panel.focus();
+}
+
+function ensureTray() {
+  if (!isAnnoy || tray) return;
+  tray = new Tray(ICON);
+  tray.setToolTip('');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: '打开', click: () => showFromTray() },
+    { label: '退出', click: () => quitApp() },
+  ]));
+  tray.on('click', () => showFromTray());
+}
+
 function createPanel() {
   const win = new BrowserWindow({
     width: 300,
@@ -270,14 +300,22 @@ function createPanel() {
   });
   win.setMenu(null);
   win.loadFile(path.join(HERE, 'renderer', 'panel.html'));
-  win.on('close', () => {
+  win.on('close', (e) => {
+    if (isAnnoy && !app.isQuitting) {
+      e.preventDefault();
+      hideToTray();
+      return;
+    }
     app.isQuitting = true;
   });
   win.on('closed', () => {
     panel = null;
-    quitApp();
+    if (!isAnnoy) quitApp();
   });
   win.webContents.on('did-finish-load', publishState);
+  if (isAnnoy) {
+    win.on('minimize', () => hideToTray());
+  }
   return win;
 }
 
@@ -758,6 +796,8 @@ if (!app.requestSingleInstanceLock()) {
         clearSave();
         send('cmd', { name: 'startFresh' });
         publishState();
+      } else if (name === 'toTray') {
+        hideToTray();
       } else if (name === 'quit') {
         quitApp();
       }
@@ -804,6 +844,10 @@ app.on('window-all-closed', () => {
 });
 app.on('before-quit', () => {
   app.isQuitting = true;
+  if (tray) {
+    try { tray.destroy(); } catch { /* */ }
+    tray = null;
+  }
   if (overlay && !overlay.isDestroyed()) stopRawMouse(overlay);
   globalShortcut.unregisterAll();
   clearInterval(mouseTimer);

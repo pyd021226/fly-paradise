@@ -149,6 +149,8 @@
     body.need-login #login { display: block; }
     body.need-login #game { display: none; }
     body.annoy #openSim { display: none; }
+    #toTray { display: none; }
+    body.annoy #toTray { display: block; }
     #shop { padding: 10px 8px 12px; overflow: hidden; }
     .shop-grid {
       display: grid;
@@ -239,6 +241,7 @@
     <button id="fast" type="button">快进</button>
     <p class="note" id="whoami"></p>
     <button id="logout" type="button">退出登录</button>
+    <button id="toTray" type="button">缩到后台</button>
     <button id="quit" type="button">退出</button>
     <label class="foot"><input id="autoStart" type="checkbox">开机启动</label>
     </div>
