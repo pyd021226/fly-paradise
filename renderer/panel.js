@@ -118,6 +118,15 @@ $('rag').onclick = () => {
 if ($('cleaner')) $('cleaner').onclick = () => api.send('cleaner');
 if ($('buyWhite')) $('buyWhite').onclick = () => api.send('buyWhite');
 if ($('buyCleaner')) $('buyCleaner').onclick = () => api.send('buyCleaner');
+if ($('officialMall')) {
+  $('officialMall').onclick = () => {
+    const box = $('officialMallBox');
+    if (!box) return;
+    const on = box.style.display === 'none';
+    box.style.display = on ? 'block' : 'none';
+    $('officialMall').classList.toggle('on', on);
+  };
+}
 $('net').onclick = () => api.send('net');
 let captureOpen = false;
 function paintCapture() {
@@ -438,7 +447,7 @@ if ($('jarSell')) $('jarSell').onclick = () => {
     if (inp) inp.focus();
     return;
   }
-  api.send('jarSell', { note });
+  api.send('jarSell', { note, points: ($('sellPoints') && $('sellPoints').value) || '' });
 };
 
 if (api.onBottle) {

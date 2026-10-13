@@ -49,7 +49,7 @@
   <div id="app">
     <div class="tabs">
       <button type="button" id="tabMine" class="on">我的商品</button>
-      <button type="button" id="tabMall">商城</button>
+      <button type="button" id="tabMall">交易市场</button>
       <button type="button" id="logout" style="margin-left:auto">退出登录</button>
     </div>
     <div id="paneMine" class="pane on">
@@ -61,7 +61,13 @@
       <div class="grid" id="gridBids"></div>
     </div>
     <div id="paneMall" class="pane">
-      <p class="sub">积分商品请在游戏面板购买：白果蝇 11（30积分）、清洁剂（30积分）。打死一只果蝇 +1 积分。</p>
+      <button type="button" id="officialToggle">官方商城</button>
+      <div id="officialBox" style="display:none;margin:10px 0 16px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--btn)">
+        <p class="note">白果蝇（基因码11）　30积分　请在游戏面板展开官方商城购买</p>
+        <p class="note">清洁剂（让尸体更好擦）　30积分　请在游戏面板展开官方商城购买</p>
+        <p class="sub" style="margin:8px 0 0">打死一只果蝇 +1 积分。积分购买在游戏里完成。</p>
+      </div>
+      <p class="sub">玩家货物。带积分售价的可用积分买。</p>
       <div class="cats" id="cats"></div>
       <input id="q" type="search" placeholder="搜索备注、卖家、种类">
       <div class="grid" id="gridMall"></div>
@@ -286,7 +292,7 @@
     const note = document.createElement("div"); note.className = "note";
     note.textContent = l.note || kindLabel(l.kind);
     const who = document.createElement("div"); who.className = "who";
-    who.textContent = kindLabel(l.kind) + " · " + (l.seller_email || "").split("@")[0] + " · ×" + (l.quantity || 1);
+    who.textContent = kindLabel(l.kind) + " · " + (l.seller_email || "").split("@")[0] + " · ×" + (l.quantity || 1) + (Number(l.want) > 0 ? (" · " + Number(l.want) + "积分") : "");
     const row = document.createElement("div"); row.className = "row";
     card.append(note, who, row);
     if (!withBid) {
@@ -299,6 +305,12 @@
         } catch (e) { tip("下架失败：" + e.message); }
       };
       row.appendChild(u);
+    } else if (Number(l.want) > 0) {
+      const bid = document.createElement("button");
+      bid.className = "off";
+      bid.textContent = "用" + Number(l.want) + "积分购买";
+      bid.onclick = () => tip("积分购买请在游戏面板「官方商城」完成。玩家货物的积分成交会显示售价，成交请在游戏里操作。");
+      row.appendChild(bid);
     }
     return card;
   }
@@ -356,7 +368,7 @@
 
   function render() {
     const mine = listings.filter(isMine);
-    const mall = listings.filter((l) => !isMine(l) && matchCat(l) && matchQ(l) && String(l.note || "").indexOf("模拟") !== 0);
+    const mall = listings.filter((l) => !isMine(l) && matchCat(l) && matchQ(l) && !/模拟|虚拟/.test(String(l.note || "")));
     const inbox = allOffers.filter((o) => o.status === "pending" && mine.some((l) => l.id === o.listing_id));
     const bids = allOffers.filter((o) => o.status === "pending" && (o.buyer_email === email || o.buyer_id === uid));
     const gi = document.getElementById("gridInbox");
@@ -393,7 +405,7 @@
 
   async function refresh() {
     syncMe();
-    listings = await req("/rest/v1/listings?status=eq.open&select=id,seller_id,seller_email,kind,color,note,quantity,fly_id,fly_ids&order=created_at.desc&limit=80");
+    listings = await req("/rest/v1/listings?status=eq.open&select=id,seller_id,seller_email,kind,color,note,want,quantity,fly_id,fly_ids&order=created_at.desc&limit=80");
     let offers = [];
     try {
       offers = await req("/rest/v1/offers?select=id,listing_id,buyer_id,buyer_email,kind,color,note,quantity,fly_id,fly_ids,status,listings(note,kind,seller_email)&status=eq.pending&order=created_at.desc&limit=80");
@@ -440,6 +452,16 @@
   document.getElementById("q").addEventListener("input", () => { q = document.getElementById("q").value; render(); });
   document.getElementById("tabMine").onclick = () => setTab("mine");
   document.getElementById("tabMall").onclick = () => setTab("mall");
+  const officialToggle = document.getElementById("officialToggle");
+  if (officialToggle) {
+    officialToggle.onclick = () => {
+      const box = document.getElementById("officialBox");
+      if (!box) return;
+      const on = box.style.display === "none";
+      box.style.display = on ? "block" : "none";
+      officialToggle.classList.toggle("on", on);
+    };
+  }
   document.getElementById("coverClose").onclick = () => document.getElementById("cover").classList.remove("on");
   document.getElementById("cover").addEventListener("click", (e) => {
     if (e.target.id === "cover") document.getElementById("cover").classList.remove("on");

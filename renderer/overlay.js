@@ -1582,28 +1582,16 @@ function flyCorpse(fly, hard) {
 function splatBits(seed, scale) {
   const s = Number(seed) || 1;
   const k = scale || 1;
-  const n = 4 + (Math.abs(Math.floor(s * 10)) % 5);
+  const n = 3 + (Math.abs(Math.floor(s * 9)) % 2);
   const bits = [];
+  const base = 7.5 * k;
   for (let i = 0; i < n; i++) {
-    const a = s * 2.1 + i * 1.37;
-    const dist = (2 + ((s * 17 + i * 13) % 11)) * k;
+    const a = s * 1.8 + i * 2.15;
+    const r = base * (0.78 + ((Math.abs(Math.floor(s * 13 + i * 7))) % 7) * 0.035);
     bits.push({
-      ox: Math.sin(a) * dist,
-      oy: Math.cos(a * 0.83) * dist * 0.7,
-      rx: (1.6 + ((s * 9 + i * 7) % 8) * 0.55) * k,
-      ry: (1.0 + ((s * 5 + i * 11) % 6) * 0.4) * k,
-      rot: a * 0.4,
-    });
-  }
-  const drips = 1 + (Math.abs(Math.floor(s * 8)) % 3);
-  for (let i = 0; i < drips; i++) {
-    const a = s + i * 0.9;
-    bits.push({
-      ox: Math.sin(a) * 2 * k,
-      oy: (6 + i * 3.5 + ((s * 3) % 4)) * k,
-      rx: (0.7 + (i % 2) * 0.4) * k,
-      ry: (1.8 + i * 0.8) * k,
-      rot: 0.1 * i,
+      ox: Math.sin(a) * (0.8 + i * 1.15) * k,
+      oy: Math.cos(a * 0.95) * (0.7 + i * 0.95) * k,
+      r,
     });
   }
   return bits;
@@ -2016,7 +2004,7 @@ function stepJar(dt, now) {
 
 let listingBusy = false;
 
-async function sellSelectedJar(note) {
+async function sellSelectedJar(note, points) {
   const caption = String(note || '').trim();
   if (!caption) { jarHint = '请先备注再上架'; publishJar(); return; }
   if (listingBusy) { jarHint = '正在上架，别连点'; publishJar(); return; }
@@ -2028,12 +2016,14 @@ async function sellSelectedJar(note) {
   const group = units.filter((u) => u.kind === kind);
   const limited = (kind === 'pupa' || kind === 'fly') ? group.slice(0, 1) : group.slice(0, 3);
   const flyIds = limited.map((u) => u.serverId);
+  const price = Math.max(0, Math.floor(Number(points) || 0));
+  const want = price > 0 ? String(price) : 'any';
   listingBusy = true;
   jarHint = '上架中…';
   publishJar();
   let res;
   try {
-    res = await window.fly.createListing(kind, flyIds, caption, 'any', limited[0].instar || null, limited[0].color || 'wild');
+    res = await window.fly.createListing(kind, flyIds, caption, want, limited[0].instar || null, limited[0].color || 'wild');
   } finally {
     listingBusy = false;
   }
@@ -2921,28 +2911,18 @@ function drawFood(f) {
 }
 
 function drawSplat(s) {
-  const t = dryAge(s) / DRY_MAX_MIN;
-  const col = wipeMix(dryDarken([74, 16, 32], s), s);
-  const midA = 0.78 - t * 0.18;
   const bits = s.bits && s.bits.length ? s.bits : splatBits(s.seed, s.scale || 1);
   ctx.save();
   ctx.translate(s.x, s.y);
-  ctx.globalAlpha = midA;
-  ctx.fillStyle = col;
   for (const b of bits) {
-    ctx.save();
-    ctx.translate(b.ox, b.oy);
-    ctx.rotate(b.rot || 0);
+    const r = b.r || ((Number(b.rx) || 4) + (Number(b.ry) || 4)) * 0.5;
+    const g = ctx.createRadialGradient(b.ox, b.oy, 0, b.ox, b.oy, r);
+    g.addColorStop(0, 'rgba(140, 58, 58, 0.72)');
+    g.addColorStop(0.45, 'rgba(96, 24, 36, 0.7)');
+    g.addColorStop(1, 'rgba(42, 8, 14, 0.58)');
+    ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(0, 0, b.rx, b.ry, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-  if (s.pigment) {
-    ctx.globalAlpha = midA * 0.4;
-    ctx.fillStyle = rgbStr(s.pigment);
-    ctx.beginPath();
-    ctx.ellipse(bits[0] ? bits[0].ox : 0, bits[0] ? bits[0].oy : 0, 3.2 * (s.scale || 1), 2.1 * (s.scale || 1), 0.3, 0, Math.PI * 2);
+    ctx.arc(b.ox, b.oy, r, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
@@ -4105,7 +4085,7 @@ if (api) {
     if (d.name === 'jarSelectAll') jarSelectAll();
     if (d.name === 'jarKillSel') jarKillSel();
     if (d.name === 'jarFreeSel') jarFreeSel();
-    if (d.name === 'jarSell') sellSelectedJar(d.note || '');
+    if (d.name === 'jarSell') sellSelectedJar(d.note || '', d.points);
     if (d.name === 'makeOffer') makeOffer(d.listingId, d.note || '');
     if (d.name === 'jarRestock') restockJar(d.items || []);
     if (d.name === 'jarUnlist') unlistToJar(d.id);

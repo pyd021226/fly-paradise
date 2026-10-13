@@ -748,7 +748,7 @@ if (!app.requestSingleInstanceLock()) {
       } else if (name === 'openShop') {
         shell.openExternal('https://pyd021226.github.io/fly-paradise/shop.html');
       } else if (name === 'jarSell') {
-        send('cmd', { name: 'jarSell', note: msg.note || '' });
+        send('cmd', { name: 'jarSell', note: msg.note || '', points: msg.points || '' });
       } else if (name === 'makeOffer') {
         send('cmd', { name: 'makeOffer', listingId: msg.listingId, note: msg.note || '' });
       } else if (name === 'jarRestock') {
