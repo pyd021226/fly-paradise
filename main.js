@@ -746,9 +746,9 @@ if (!app.requestSingleInstanceLock()) {
       } else if (name === 'jarSelectAll' || name === 'jarFreeSel') {
         send('cmd', { name });
       } else if (name === 'openShop') {
-        shell.openExternal('https://pyd021226.github.io/fly-paradise/shop.html');
+        if (!isAnnoy) shell.openExternal('https://pyd021226.github.io/fly-paradise/shop.html');
       } else if (name === 'jarSell') {
-        send('cmd', { name: 'jarSell', note: msg.note || '', points: msg.points || '' });
+        if (!isAnnoy) send('cmd', { name: 'jarSell', note: msg.note || '', points: msg.points || '' });
       } else if (name === 'jarRestock') {
         send('cmd', { name: 'jarRestock', items: msg.items || [] });
       } else if (name === 'jarUnlist') {

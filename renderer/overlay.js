@@ -2005,6 +2005,7 @@ function stepJar(dt, now) {
 let listingBusy = false;
 
 async function sellSelectedJar(note, points) {
+  if (flavorAnnoy) { jarHint = '造福版不上架'; publishJar(); return; }
   const caption = String(note || '').trim();
   if (!caption) { jarHint = '请先备注再上架'; publishJar(); return; }
   if (listingBusy) { jarHint = '正在上架，别连点'; publishJar(); return; }

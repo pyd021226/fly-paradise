@@ -148,8 +148,21 @@
     #game { display: block; }
     body.need-login #login { display: block; }
     body.need-login #game { display: none; }
+    #openShop { position: relative; }
+    #openShop.dot::after {
+      content: "";
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #e23d7a;
+    }
     #toTray { display: none; }
     body.annoy #toTray { display: block; }
+    body.annoy #shopBox,
+    body.annoy .sell-only { display: none !important; }
     .box {
       border: 1px solid var(--line);
       border-radius: 10px;
@@ -229,6 +242,16 @@
     <div class="stats" id="points">积分 0</div>
     <p class="note">打死一只 +1 积分</p>
     <button id="openSim" type="button">配种推演</button>
+    <div class="box" id="shopBox">
+      <div class="lab">商店</div>
+      <button id="officialMall" type="button">官方商城</button>
+      <div id="officialMallBox" class="stats" style="display:none">
+        <div>白果蝇（基因码11）　30积分 <button id="buyWhite" type="button">购买</button></div>
+        <div>清洁剂（让尸体更好擦）　30积分 <button id="buyCleaner" type="button">购买</button></div>
+      </div>
+      <button id="openShop" type="button">交易市场</button>
+      <p class="note" id="shopStatus"></p>
+    </div>
     <div class="box">
       <div class="lab">工具</div>
       <button id="xray" type="button">全图透视</button>
@@ -239,7 +262,10 @@
         <button id="net" type="button">拿出捕网</button>
         <p class="note">瓶内待满 2 分钟会死亡，留下尸体。</p>
         <p class="jar-msg" id="jarMsg"></p>
-        <div class="row"><button id="jarAll" type="button">瓶内全选</button><button id="jarFree" type="button">放回选中</button></div>
+        <input id="sellNote" class="sell-only" type="text" placeholder="备注这是什么（写在图下）" maxlength="40">
+        <input id="sellPoints" class="sell-only" type="number" min="1" step="1" placeholder="积分售价（必填）">
+        <div class="row"><button id="jarAll" type="button">瓶内全选</button><button id="jarSell" class="sell-only" type="button">上架选中</button></div>
+        <button id="jarFree" type="button">放回选中</button>
       </div>
       <button id="cleaner" type="button">清洁剂</button>
     </div>
