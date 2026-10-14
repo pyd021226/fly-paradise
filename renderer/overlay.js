@@ -1890,6 +1890,10 @@ function intoJar(kind, extra) {
     serverId: extra.serverId || null,
     color: extra.color || 'wild',
     codon: extra.codon || '',
+    gene_d: extra.gene_d,
+    gene_p: extra.gene_p,
+    blood: extra.blood,
+    geno: extra.geno,
     instar: extra.instar || 1,
     scale: extra.scale || 1,
     seed: extra.seed || rand(0, 80),
@@ -2120,15 +2124,26 @@ function jarSelectAll() {
 }
 
 function jarFreeSel() {
-  for (const id of [...jarSel]) jarFree(id);
-  jarSel = new Set();
+  let ids = [...jarSel];
+  if (!ids.length) ids = jar.map((u) => u.id);
+  if (!ids.length) {
+    jarHint = '瓶子是空的';
+    publishJar();
+    return;
+  }
+  for (const id of ids) jarFree(id);
+  const stuck = new Set(jar.map((u) => u.id));
+  jarSel = new Set(ids.filter((id) => stuck.has(id)));
   publishJar();
 }
 
 function jarFree(id) {
   const u = jar.find((x) => x.id === id);
   if (!u) return;
-  const drop = { x: netCx || (W * 0.5), y: netCy || (H * 0.4) };
+  const drop = {
+    x: netCx || (bottle ? bottle.x + bottle.w * 0.5 : 0) || (W * 0.5),
+    y: netCy || (bottle ? bottle.y + bottle.h + 8 : 0) || (H * 0.4),
+  };
   if (u.dead) {
     corpses.push({
       id: nextId++, kind: 'fly',
@@ -2151,6 +2166,8 @@ function jarFree(id) {
   if (u.kind === 'fly') {
     const f = spawnFly(drop.x, drop.y, {
       sex: u.sex, serverId: u.serverId, color: u.color || 'wild', codon: u.codon || '',
+      gene_d: u.gene_d, gene_p: u.gene_p, blood: u.blood, geno: u.geno,
+      seed: u.seed, scale: u.scale,
     });
     if (!f) {
       jarHint = '成虫已满 12，放不出。';
