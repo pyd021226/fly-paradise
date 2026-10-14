@@ -26,5 +26,4 @@ contextBridge.exposeInMainWorld('fly', {
   addPoint: (n) => ipcRenderer.invoke('fly-add-point', { n }),
   createListing: (kind, flyIds, note, want, instar, color) => ipcRenderer.invoke('fly-create-listing', { kind, flyIds, note, want, instar, color }),
   unlistListing: (id) => ipcRenderer.invoke('fly-unlist-listing', { id }),
-  createOffer: (listingId, kind, flyIds, note, color, instar) => ipcRenderer.invoke('fly-create-offer', { listingId, kind, flyIds, note, color, instar }),
 });

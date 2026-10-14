@@ -20,5 +20,6 @@ contextBridge.exposeInMainWorld('panel', {
   createListing: (kind, flyIds, note, want, instar, color) => ipcRenderer.invoke('fly-create-listing', { kind, flyIds, note, want, instar, color }),
   addPoint: (n) => ipcRenderer.invoke('fly-add-point', { n }),
   getPoints: () => ipcRenderer.invoke('fly-get-points'),
+  buyListing: (id) => ipcRenderer.invoke('fly-buy-listing', { id }),
   simulateClutch: (a, b, n) => ipcRenderer.invoke('fly-simulate-clutch', { a, b, n }),
 });

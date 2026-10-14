@@ -2029,7 +2029,8 @@ async function sellSelectedJar(note, points) {
   const limited = (kind === 'pupa' || kind === 'fly') ? group.slice(0, 1) : group.slice(0, 3);
   const flyIds = limited.map((u) => u.serverId);
   const price = Math.max(0, Math.floor(Number(points) || 0));
-  const want = price > 0 ? String(price) : 'any';
+  if (!(price >= 1)) { jarHint = '上架前要设置积分'; publishJar(); return; }
+  const want = String(price);
   listingBusy = true;
   jarHint = '上架中…';
   publishJar();
@@ -2051,37 +2052,6 @@ async function sellSelectedJar(note, points) {
     jarHint = '已上架';
   } else {
     jarHint = '上架失败：' + ((res && res.error) || '未知');
-  }
-  publishJar();
-}
-
-async function makeOffer(listingId, note) {
-  if (!listingId) { jarHint = '先点商店里的报价'; publishJar(); return; }
-  if (listingBusy) { jarHint = '正在报价，别连点'; publishJar(); return; }
-  const sel = [...jarSel];
-  if (!sel.length) { jarHint = '先在瓶子里选中要拿来换的'; publishJar(); return; }
-  const units = sel.map((id) => jar.find((x) => x.id === id)).filter((u) => u && u.serverId);
-  if (!units.length) { jarHint = '该物品无法报价'; publishJar(); return; }
-  const kind = units[0].kind;
-  const group = units.filter((u) => u.kind === kind);
-  const limited = (kind === 'pupa' || kind === 'fly') ? group.slice(0, 1) : group.slice(0, 3);
-  const flyIds = limited.map((u) => u.serverId);
-  listingBusy = true;
-  jarHint = '报价中…';
-  publishJar();
-  let res;
-  try {
-    res = await window.fly.createOffer(listingId, kind, flyIds, note, limited[0].color || 'wild', limited[0].instar || null);
-  } finally {
-    listingBusy = false;
-  }
-  if (res && res.ok) {
-    const gone = new Set(limited.map((u) => u.id));
-    jar = jar.filter((u) => !gone.has(u.id));
-    for (const id of gone) jarSel.delete(id);
-    jarHint = '已报价';
-  } else {
-    jarHint = '报价失败：' + ((res && res.error) || '未知');
   }
   publishJar();
 }
@@ -4129,7 +4099,6 @@ if (api) {
     if (d.name === 'jarKillSel') jarKillSel();
     if (d.name === 'jarFreeSel') jarFreeSel();
     if (d.name === 'jarSell') sellSelectedJar(d.note || '', d.points);
-    if (d.name === 'makeOffer') makeOffer(d.listingId, d.note || '');
     if (d.name === 'jarRestock') restockJar(d.items || []);
     if (d.name === 'jarUnlist') unlistToJar(d.id);
     if (d.name === 'capture') captureOpen = !!d.value;

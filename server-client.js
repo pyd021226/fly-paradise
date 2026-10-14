@@ -237,6 +237,8 @@ export async function createListing(kind, flyIds, note, want, instar, color) {
   if (!me) return { ok: false, error: '未登录' };
   const ids = Array.isArray(flyIds) ? flyIds.filter(Boolean) : [];
   if (!ids.length) return { ok: false, error: '参数不对' };
+  const price = Math.floor(Number(want));
+  if (!(price >= 1)) return { ok: false, error: '上架前要设置积分' };
   let res;
   try {
     const open = await fetchTimeout(`${URL}/rest/v1/listings?status=eq.open&seller_id=eq.${me.id}&select=fly_id,fly_ids`, {
@@ -262,7 +264,7 @@ export async function createListing(kind, flyIds, note, want, instar, color) {
         instar: instar || null,
         color: color || 'wild',
         note: String(note || '').trim(),
-        want: want || 'any',
+        want: String(price),
         status: 'open',
       }),
     });
@@ -442,4 +444,22 @@ export async function claimOffer(id) {
 
 export async function getPoints() {
   return call('get-points');
+}
+
+export async function buyListing(id) {
+  if (!(await ensureToken())) return { ok: false, error: '未登录' };
+  if (!id) return { ok: false, error: '没有商品' };
+  let res;
+  try {
+    res = await fetchTimeout(`${URL}/rest/v1/rpc/buy_listing`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ p_listing_id: id }),
+    });
+  } catch (e) {
+    return { ok: false, error: e.timeout ? '请求超时' : (e.message || '购买失败') };
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, error: data.message || data.error || '购买失败' };
+  return { ok: true, data };
 }

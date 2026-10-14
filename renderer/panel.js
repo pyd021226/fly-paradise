@@ -445,7 +445,14 @@ if ($('jarSell')) $('jarSell').onclick = () => {
     if (inp) inp.focus();
     return;
   }
-  api.send('jarSell', { note, points: ($('sellPoints') && $('sellPoints').value) || '' });
+  const pts = Math.floor(Number(($('sellPoints') && $('sellPoints').value) || 0));
+  if (!(pts >= 1)) {
+    shopTip('上架前要设置积分');
+    const inp = $('sellPoints');
+    if (inp) inp.focus();
+    return;
+  }
+  api.send('jarSell', { note, points: String(pts) });
 };
 
 if (api.onBottle) {
@@ -459,11 +466,13 @@ if (api.onBottle) {
       shopTip('已下架');
       return;
     }
-    if (hint === '已上架' || hint.indexOf('上架失败') === 0 || hint === '已报价' || hint.indexOf('报价失败') === 0) {
+    if (hint === '已上架' || hint.indexOf('上架失败') === 0 || hint === '上架前要设置积分') {
       shopTip(hint);
-      if (hint === '已上架' || hint === '已报价') {
+      if (hint === '已上架') {
         const inp = $('sellNote');
         if (inp) inp.value = '';
+        const pts = $('sellPoints');
+        if (pts) pts.value = '';
       }
       loadShop();
     }
@@ -540,51 +549,6 @@ function restockOfferItems(ids, kind, color, tip) {
   shopTip(tip);
 }
 
-function paintTradeDot(n) {
-  const btn = $('openShop');
-  if (btn) btn.classList.toggle('dot', n > 0);
-}
-
-function paintTradeInbox(pending, me) {
-  const box = $('tradeInbox');
-  if (!box) return;
-  box.innerHTML = '';
-  if (!pending.length) return;
-  for (const o of pending) {
-    const listed = o.listings || {};
-    const row = document.createElement('div');
-    row.className = 'note';
-    row.style.marginBottom = '8px';
-    const who = (o.buyer_email || '').split('@')[0] || '买家';
-    row.textContent = who + ' 想用 ' + (o.kind || 'fly') + ' ×' + (o.quantity || 1) + ' 换「' + (listed.note || listed.kind || '你的货') + '」';
-    const acc = document.createElement('button');
-    acc.type = 'button';
-    acc.textContent = '同意';
-    acc.onclick = async () => {
-      if (!api.acceptOffer) return;
-      const res = await api.acceptOffer(o.id);
-      if (res && res.ok) {
-        const ids = (Array.isArray(o.fly_ids) && o.fly_ids.length) ? o.fly_ids : (o.fly_id ? [o.fly_id] : []);
-        restockOfferItems(ids, o.kind || 'fly', o.color || 'wild', '已同意，货进瓶子');
-        processedOffers.add(o.id + 'accepted');
-      } else {
-        shopTip('接受失败：' + ((res && res.error) || ''));
-      }
-      loadShop();
-    };
-    const rej = document.createElement('button');
-    rej.type = 'button';
-    rej.textContent = '拒绝';
-    rej.onclick = async () => {
-      if (!api.rejectOffer) return;
-      const res = await api.rejectOffer(o.id);
-      shopTip((res && res.ok) ? '已拒绝，货还在架上' : ('拒绝失败：' + ((res && res.error) || '')));
-      loadShop();
-    };
-    box.append(row, acc, rej);
-  }
-}
-
 async function myEmail() {
   if (api.currentUser) {
     try {
@@ -606,35 +570,23 @@ async function loadShop() {
   } catch (e) {
     offers = [];
   }
-  const pendingMine = offers.filter((o) => {
-    if (o.status !== 'pending') return false;
-    const listed = o.listings || {};
-    return (listed.seller_email || '').toLowerCase() === me;
-  });
-  paintTradeDot(pendingMine.length);
-  paintTradeInbox(pendingMine, me);
+  const btn = $('openShop');
+  if (btn) btn.classList.remove('dot');
   for (const o of offers) {
     if (processedOffers.has(o.id + o.status)) continue;
     const listed = o.listings || {};
-    const seller = (listed.seller_email || '').toLowerCase();
     const buyer = (o.buyer_email || '').toLowerCase();
     if (o.status === 'accepted' && buyer === me) {
-      const ids = (Array.isArray(listed.fly_ids) && listed.fly_ids.length) ? listed.fly_ids : (listed.fly_id ? [listed.fly_id] : []);
-      restockOfferItems(ids, listed.kind || 'fly', listed.color || 'wild', '换到了东西，已进瓶子');
+      const ids = (Array.isArray(listed.fly_ids) && listed.fly_ids.length)
+        ? listed.fly_ids
+        : (Array.isArray(o.fly_ids) && o.fly_ids.length)
+          ? o.fly_ids
+          : (listed.fly_id ? [listed.fly_id] : (o.fly_id ? [o.fly_id] : []));
+      restockOfferItems(ids, listed.kind || o.kind || 'fly', listed.color || o.color || 'wild', '买到了，已进瓶子');
       processedOffers.add(o.id + o.status);
-    }
-    if (o.status === 'accepted' && seller === me) {
-      const ids = (Array.isArray(o.fly_ids) && o.fly_ids.length) ? o.fly_ids : (o.fly_id ? [o.fly_id] : []);
-      restockOfferItems(ids, o.kind || 'fly', o.color || 'wild', '换到了东西，已进瓶子');
-      processedOffers.add(o.id + o.status);
-    }
-    if (o.status === 'rejected' && buyer === me) {
-      const ids = (Array.isArray(o.fly_ids) && o.fly_ids.length) ? o.fly_ids : (o.fly_id ? [o.fly_id] : []);
-      restockOfferItems(ids, o.kind || 'fly', o.color || 'wild', '报价被拒，东西已退回瓶子');
-      processedOffers.add(o.id + o.status);
-      if (api.claimOffer) api.claimOffer(o.id);
     }
   }
+  loadPoints();
 }
 
 if (!shopPoll) shopPoll = setInterval(() => {

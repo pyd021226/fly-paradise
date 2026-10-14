@@ -739,8 +739,6 @@ if (!app.requestSingleInstanceLock()) {
         shell.openExternal('https://pyd021226.github.io/fly-paradise/shop.html');
       } else if (name === 'jarSell') {
         send('cmd', { name: 'jarSell', note: msg.note || '', points: msg.points || '' });
-      } else if (name === 'makeOffer') {
-        send('cmd', { name: 'makeOffer', listingId: msg.listingId, note: msg.note || '' });
       } else if (name === 'jarRestock') {
         send('cmd', { name: 'jarRestock', items: msg.items || [] });
       } else if (name === 'jarUnlist') {
@@ -824,6 +822,7 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('fly-reject-offer', async (_e, arg) => flyApi.rejectOffer(arg.id));
     ipcMain.handle('fly-claim-offer', async (_e, arg) => flyApi.claimOffer(arg.id));
     ipcMain.handle('fly-get-points', async () => flyApi.getPoints());
+    ipcMain.handle('fly-buy-listing', async (_e, arg) => flyApi.buyListing(arg.id));
     ipcMain.handle('fly-simulate-clutch', async (_e, arg) => {
       try {
         const a = parentFromSim(arg && arg.a, 'a');
