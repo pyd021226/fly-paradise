@@ -344,7 +344,6 @@ function parentFromSim(raw, side) {
 }
 
 function openSim() {
-  if (isAnnoy) return;
   if (simWin && !simWin.isDestroyed()) {
     simWin.show();
     simWin.focus();

@@ -148,7 +148,6 @@
     #game { display: block; }
     body.need-login #login { display: block; }
     body.need-login #game { display: none; }
-    body.annoy #openSim { display: none; }
     #openShop { position: relative; }
     #openShop.dot::after {
       content: "";
@@ -240,6 +239,7 @@
     <div class="stats" id="stats">成虫 0　卵 0　蛆 0/0/0　蛹 0<br><span class="m">褐色AaBb （1） 0</span><span class="m">中褐AaBB （2） 0</span><span class="m">深褐AABb （3） 0</span><span class="m">白色AABB （4） 0</span></div>
     <div class="stats" id="points">积分 0</div>
     <p class="note">打死一只 +1 积分</p>
+    <button id="openSim" type="button">配种推演</button>
     <div class="box">
       <div class="lab">商店</div>
       <button id="officialMall" type="button">官方商城</button>
@@ -274,7 +274,6 @@
       <label><input id="sexM" type="checkbox" checked>雄</label>
     </div>
     <button id="codon" type="button">显示基因码</button>
-    <button id="openSim" type="button">配种推演</button>
     <button id="fast" type="button">快进</button>
     <p class="note" id="whoami"></p>
     <button id="logout" type="button">退出登录</button>
