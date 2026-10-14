@@ -1,7 +1,7 @@
 {
   "name": "desktop-fly-pet",
   "productName": "果蝇乐园",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Desktop fruit flies that land on icons, flee the cursor, eat, and can be swatted",
   "type": "module",
   "main": "main.js",
@@ -30,6 +30,7 @@
     },
     "files": [
       "main.js",
+      "server-client.js",
       "preload.mjs",
       "preload-panel.mjs",
       "package.json",
