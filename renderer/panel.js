@@ -600,14 +600,14 @@ async function loadLeaderboard() {
   const el = $('leaderboard');
   const res = await api.getLeaderboard();
   if (!res || !res.ok || !el) return;
-  const { records, mutations } = res.data || {};
+  const { records } = res.data || {};
   const name = (e) => (e || '').split('@')[0];
   let html = '<b>排行榜</b>';
-  if (records && records.length) {
-    html += '<span class="m">最快通关：' + records.slice(0, 10).map((r) => `${name(r.email)} ${fmtMs(r.time_ms)}`).join(' · ') + '</span>';
-  }
-  if (mutations && mutations.length) {
-    html += '<span class="m">最稀有突变：' + mutations.slice(0, 10).map((m) => `${name(m.email)} Lv.${m.level} ${(m.probability * 100).toFixed(3)}%`).join(' · ') + '</span>';
+  const top = (records || []).slice(0, 3);
+  if (top.length) {
+    html += '<span class="m">第一绿最快：' + top.map((r, i) => `${i + 1}.${name(r.email)} ${fmtMs(r.time_ms)}`).join(' · ') + '</span>';
+  } else {
+    html += '<span class="m">还没有第一绿成绩</span>';
   }
   el.innerHTML = html;
 }

@@ -3706,7 +3706,11 @@ function checkClear() {
   if (!breed || cleared) return;
   if (flies.some((f) => isGreenMorph(f))) {
     cleared = true;
-    if (window.fly && window.fly.submitRecord) window.fly.submitRecord(Math.round(breedMs));
+    const ms = Math.round(breedMs);
+    (async () => {
+      if (window.fly && window.fly.ensureGuest) await window.fly.ensureGuest();
+      if (window.fly && window.fly.submitRecord) window.fly.submitRecord(ms);
+    })();
   }
 }
 

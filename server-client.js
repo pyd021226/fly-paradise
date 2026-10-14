@@ -198,6 +198,10 @@ export async function breed(a, b, appendFrom) {
 }
 
 export async function submitRecord(timeMs) {
+  if (!(await ensureToken())) {
+    const g = await ensureGuest();
+    if (!g.ok) return g;
+  }
   return call('submit-record', { time_ms: timeMs });
 }
 
@@ -206,6 +210,10 @@ export async function submitMutation(flyId) {
 }
 
 export async function getLeaderboard() {
+  if (!(await ensureToken())) {
+    const g = await ensureGuest();
+    if (!g.ok) return g;
+  }
   return call('leaderboard');
 }
 
