@@ -90,6 +90,7 @@
   <div class="row">
     <button type="button" id="breed" disabled>这两只下崽</button>
     <button class="ghost" type="button" id="rand">随机两只下崽</button>
+    <button class="ghost" type="button" id="undo" disabled>回退上一窝</button>
     <button class="ghost" type="button" id="reset">清场重来</button>
     <span class="hint" id="pickHint">还没选</span>
   </div>
@@ -107,6 +108,33 @@
   let selected = [];
   let nextId = 1;
   let lastBorn = [];
+  let history = [];
+
+  function paintUndo() {
+    const btn = $("undo");
+    if (btn) btn.disabled = !history.length;
+  }
+  function snapshot() {
+    history.push({
+      nextId,
+      flies: JSON.parse(JSON.stringify(flies)),
+      lastBorn: lastBorn.slice(),
+      selected: selected.slice(),
+      logHtml: $("log").innerHTML,
+    });
+    if (history.length > 30) history.shift();
+  }
+  function undoLast() {
+    const prev = history.pop();
+    if (!prev) return;
+    nextId = prev.nextId;
+    flies = prev.flies;
+    lastBorn = prev.lastBorn;
+    selected = prev.selected;
+    $("log").innerHTML = prev.logHtml || "";
+    save();
+    render();
+  }
 
   function bodyTrait(d, p) {
     function pair(n, dom, rec) {
@@ -146,13 +174,14 @@
     nextId = 1;
     selected = [];
     lastBorn = [];
+    history = [];
     flies = [starter("褐公", "m"), starter("褐母", "f")];
     $("log").innerHTML = "";
     save();
     render();
   }
   function save() {
-    try { localStorage.setItem(KEY, JSON.stringify({ nextId, flies })); } catch (e) {}
+    try { localStorage.setItem(KEY, JSON.stringify({ nextId, flies, history })); } catch (e) {}
   }
   function load() {
     try {
@@ -160,6 +189,7 @@
       if (s && Array.isArray(s.flies) && s.flies.length) {
         flies = s.flies;
         nextId = Number(s.nextId) || flies.length + 1;
+        history = Array.isArray(s.history) ? s.history : [];
         return;
       }
     } catch (e) {}
@@ -206,6 +236,7 @@
     $("field").querySelectorAll(".fly").forEach((el) => {
       el.onclick = () => toggle(el.getAttribute("data-id"));
     });
+    paintUndo();
   }
 
   function parentPayload(f) {
@@ -229,8 +260,12 @@
     if (!pairOk(rawA, rawB)) throw new Error("要一公一母");
     const dad = rawA.sex === "m" ? rawA : rawB;
     const mom = rawA.sex === "f" ? rawA : rawB;
+    snapshot();
     const res = await api.simulateClutch(parentPayload(dad), parentPayload(mom), 3);
-    if (!res || !res.ok) throw new Error((res && res.error) || "推演失败");
+    if (!res || !res.ok) {
+      history.pop();
+      throw new Error((res && res.error) || "推演失败");
+    }
     const data = res.data || {};
     const born = [];
     const lines = [];
@@ -292,6 +327,7 @@
     try { await breedIds(dad.id, mom.id); } catch (e) { $("err").textContent = e.message || String(e); }
   };
   $("reset").onclick = resetField;
+  $("undo").onclick = undoLast;
 
   load();
   render();

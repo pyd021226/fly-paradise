@@ -116,17 +116,6 @@ $('rag').onclick = () => {
   else api.send('rag');
 };
 if ($('cleaner')) $('cleaner').onclick = () => api.send('cleaner');
-if ($('buyWhite')) $('buyWhite').onclick = () => api.send('buyWhite');
-if ($('buyCleaner')) $('buyCleaner').onclick = () => api.send('buyCleaner');
-if ($('officialMall')) {
-  $('officialMall').onclick = () => {
-    const box = $('officialMallBox');
-    if (!box) return;
-    const on = box.style.display === 'none';
-    box.style.display = on ? 'block' : 'none';
-    $('officialMall').classList.toggle('on', on);
-  };
-}
 $('net').onclick = () => api.send('net');
 let captureOpen = false;
 function paintCapture() {
@@ -434,50 +423,8 @@ function drawJar() {
 if (jarCv) {
   jarCv.onclick = null;
 }
-if ($('openShop')) $('openShop').onclick = () => api.send('openShop');
 if ($('jarAll')) $('jarAll').onclick = () => api.send('jarSelectAll');
 if ($('jarFree')) $('jarFree').onclick = () => api.send('jarFreeSel');
-if ($('jarSell')) $('jarSell').onclick = () => {
-  const note = ($('sellNote') && $('sellNote').value.trim()) || '';
-  if (!note) {
-    shopTip('请先备注再上架');
-    const inp = $('sellNote');
-    if (inp) inp.focus();
-    return;
-  }
-  const pts = Math.floor(Number(($('sellPoints') && $('sellPoints').value) || 0));
-  if (!(pts >= 1)) {
-    shopTip('上架前要设置积分');
-    const inp = $('sellPoints');
-    if (inp) inp.focus();
-    return;
-  }
-  api.send('jarSell', { note, points: String(pts) });
-};
-
-if (api.onBottle) {
-  api.onBottle((d) => {
-    const hint = (d && d.hint) || '';
-    if (hint.indexOf('先在瓶子') === 0 || hint === '该物品无法报价') {
-      shopTip(hint);
-      return;
-    }
-    if (hint === '已下架' || hint === '已下架回瓶') {
-      shopTip('已下架');
-      return;
-    }
-    if (hint === '已上架' || hint.indexOf('上架失败') === 0 || hint === '上架前要设置积分') {
-      shopTip(hint);
-      if (hint === '已上架') {
-        const inp = $('sellNote');
-        if (inp) inp.value = '';
-        const pts = $('sellPoints');
-        if (pts) pts.value = '';
-      }
-      loadShop();
-    }
-  });
-}
 
 // 登录
 const LOGIN_EMAIL_KEY = 'fly-login-email';
@@ -498,7 +445,7 @@ function showLogin(msg) {
 function enterGuest() {
   document.body.classList.remove('need-login');
   document.body.classList.add('guest');
-  if ($('whoami')) $('whoami').textContent = '游客模式 · 可上架';
+  if ($('whoami')) $('whoami').textContent = '游客模式';
   if ($('logout')) $('logout').textContent = '登录账号';
   api.send('guest');
   if (api.ensureGuest) {
@@ -508,7 +455,6 @@ function enterGuest() {
       }
     }).catch(() => {});
   }
-  loadShop();
   loadLeaderboard();
   loadPoints();
 }
@@ -519,7 +465,6 @@ function showGame(email) {
   if ($('logout')) $('logout').textContent = '退出登录';
   if ($('whoami')) $('whoami').textContent = email ? ('当前账号 ' + email) : '';
   loadLeaderboard();
-  loadShop();
   loadPoints();
 }
 
@@ -531,67 +476,6 @@ async function loadPoints() {
     el.textContent = '积分 ' + (res.data.amount || 0);
   }
 }
-
-let shopPoll = 0;
-const processedOffers = new Set();
-
-function openCapture() {
-  if (captureOpen) return;
-  captureOpen = true;
-  paintCapture();
-  api.send('capture', { open: true });
-}
-
-function restockOfferItems(ids, kind, color, tip) {
-  if (!ids || !ids.length) return;
-  openCapture();
-  api.send('jarRestock', { items: ids.map((fid) => ({ kind: kind || 'fly', serverId: fid, color: color || 'wild', codon: '', instar: 1 })) });
-  shopTip(tip);
-}
-
-async function myEmail() {
-  if (api.currentUser) {
-    try {
-      const u = await api.currentUser();
-      if (u && u.ok && u.email) return String(u.email);
-    } catch (e) { /* */ }
-  }
-  return ($('loginEmail') && $('loginEmail').value.trim()) || '';
-}
-
-async function loadShop() {
-  const me = (await myEmail()).toLowerCase();
-  let offers = [];
-  try {
-    if (api.listOffers) {
-      const oRes = await api.listOffers();
-      if (oRes && oRes.ok) offers = (oRes.data && oRes.data.offers) || [];
-    }
-  } catch (e) {
-    offers = [];
-  }
-  const btn = $('openShop');
-  if (btn) btn.classList.remove('dot');
-  for (const o of offers) {
-    if (processedOffers.has(o.id + o.status)) continue;
-    const listed = o.listings || {};
-    const buyer = (o.buyer_email || '').toLowerCase();
-    if (o.status === 'accepted' && buyer === me) {
-      const ids = (Array.isArray(listed.fly_ids) && listed.fly_ids.length)
-        ? listed.fly_ids
-        : (Array.isArray(o.fly_ids) && o.fly_ids.length)
-          ? o.fly_ids
-          : (listed.fly_id ? [listed.fly_id] : (o.fly_id ? [o.fly_id] : []));
-      restockOfferItems(ids, listed.kind || o.kind || 'fly', listed.color || o.color || 'wild', '买到了，已进瓶子');
-      processedOffers.add(o.id + o.status);
-    }
-  }
-  loadPoints();
-}
-
-if (!shopPoll) shopPoll = setInterval(() => {
-  if (!document.body.classList.contains('need-login')) loadShop();
-}, 8000);
 
 async function loadLeaderboard() {
   if (!api.getLeaderboard) return;
