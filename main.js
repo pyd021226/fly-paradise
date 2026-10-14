@@ -100,11 +100,20 @@ function putAwaySwatter() {
 
 function applyAutoStart() {
   const opts = { openAtLogin: autoStart, enabled: autoStart, name: '果蝇乐园' };
+  const extra = isAnnoy ? ['--tray'] : [];
   if (app.isPackaged) {
-    app.setLoginItemSettings({ ...opts, path: process.execPath, args: [] });
+    app.setLoginItemSettings({ ...opts, path: process.execPath, args: extra });
   } else {
-    app.setLoginItemSettings({ ...opts, path: process.execPath, args: [HERE] });
+    app.setLoginItemSettings({ ...opts, path: process.execPath, args: [HERE, ...extra] });
   }
+}
+
+function startedFromLogin() {
+  if (process.argv.includes('--tray')) return true;
+  try {
+    if (app.getLoginItemSettings().wasOpenedAtLogin) return true;
+  } catch { /* */ }
+  return false;
 }
 
 function loadSettings() {
@@ -291,6 +300,7 @@ function createPanel() {
     minimizable: true,
     maximizable: false,
     fullscreenable: false,
+    show: false,
     skipTaskbar: false,
     autoHideMenuBar: true,
     title: '果蝇乐园',
@@ -624,10 +634,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (!panel || panel.isDestroyed()) return;
-    if (panel.isMinimized()) panel.restore();
-    panel.show();
-    panel.focus();
+    showFromTray();
   });
 
   app.whenReady().then(() => {
@@ -660,8 +667,12 @@ if (!app.requestSingleInstanceLock()) {
     overlay.on('move', publishGeometry);
 
     panel = createPanel();
-    panel.once('ready-to-show', () => panel.show());
-    panel.show();
+    if (isAnnoy && startedFromLogin()) {
+      hideToTray();
+    } else {
+      panel.once('ready-to-show', () => panel.show());
+      panel.show();
+    }
     panel.on('move', sendBottleRect);
     panel.on('resize', sendBottleRect);
 
