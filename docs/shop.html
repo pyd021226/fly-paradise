@@ -57,12 +57,6 @@
       <div class="grid" id="gridMine"></div>
     </div>
     <div id="paneMall" class="pane">
-      <button type="button" id="officialToggle">官方商城</button>
-      <div id="officialBox" style="display:none;margin:10px 0 16px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--btn)">
-        <p class="note">白果蝇（基因码11）　30积分　请在游戏面板展开官方商城购买</p>
-        <p class="note">清洁剂（让尸体更好擦）　30积分　请在游戏面板展开官方商城购买</p>
-        <p class="sub" style="margin:8px 0 0">打死一只果蝇 +1 积分。</p>
-      </div>
       <p class="sub">玩家货物，只能用积分买。上架必须先标积分。</p>
       <div class="cats" id="cats"></div>
       <input id="q" type="search" placeholder="搜索备注、卖家、种类">
@@ -376,16 +370,6 @@
   document.getElementById("q").addEventListener("input", () => { q = document.getElementById("q").value; render(); });
   document.getElementById("tabMine").onclick = () => setTab("mine");
   document.getElementById("tabMall").onclick = () => setTab("mall");
-  const officialToggle = document.getElementById("officialToggle");
-  if (officialToggle) {
-    officialToggle.onclick = () => {
-      const box = document.getElementById("officialBox");
-      if (!box) return;
-      const on = box.style.display === "none";
-      box.style.display = on ? "block" : "none";
-      officialToggle.classList.toggle("on", on);
-    };
-  }
   document.getElementById("logout").onclick = () => kickLogin("已退出");
   document.getElementById("loginBtn").onclick = () => login().catch((e) => tip(e.message));
 
