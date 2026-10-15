@@ -2321,6 +2321,24 @@ function drawBottle(now) {
     }
   }
   ctx.restore();
+  if (showCodons) {
+    ctx.save();
+    ctx.font = '11px "Consolas", "Microsoft YaHei", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+    ctx.fillStyle = 'rgba(0,0,0,0.82)';
+    for (const u of jar) {
+      const code = u.codon || '';
+      if (!code) continue;
+      const x = b.x + pad + u.x * spaceScale;
+      const y = b.y + pad + u.y * spaceScaleY - 10;
+      ctx.strokeText(code, x, y);
+      ctx.fillText(code, x, y);
+    }
+    ctx.restore();
+  }
 }
 
 function bottleAt(x, y) {
