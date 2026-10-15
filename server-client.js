@@ -162,6 +162,17 @@ export async function currentUser() {
   return ok ? { ok: true, email: sessionEmail } : { ok: false };
 }
 
+export function getShopSession() {
+  if (!accessToken) return null;
+  const p = decodeJwt(accessToken);
+  return {
+    access_token: accessToken,
+    refresh_token: refreshToken || '',
+    email: sessionEmail || (p && p.email) || '',
+    uid: (p && p.sub) || '',
+  };
+}
+
 async function call(name, body) {
   if (!(await ensureToken())) return { ok: false, error: '未登录' };
   let res;

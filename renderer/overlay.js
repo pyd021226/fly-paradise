@@ -2141,8 +2141,8 @@ function jarFree(id) {
   const u = jar.find((x) => x.id === id);
   if (!u) return;
   const drop = {
-    x: netCx || (bottle ? bottle.x + bottle.w * 0.5 : 0) || (W * 0.5),
-    y: netCy || (bottle ? bottle.y + bottle.h + 8 : 0) || (H * 0.4),
+    x: netCx || (bottle ? bottle.x + bottle.w + 36 : 0) || (W * 0.5),
+    y: netCy || (bottle ? bottle.y + 80 : 0) || (H * 0.4),
   };
   if (u.dead) {
     corpses.push({

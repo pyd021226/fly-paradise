@@ -458,7 +458,11 @@ if ($('jarSell')) $('jarSell').onclick = () => {
 
 if (api.onBottle) {
   api.onBottle((d) => {
-    const hint = (d && d.hint) || '';
+    const hint = (d && d.hint != null) ? String(d.hint) : '';
+    if ($('jarMsg') && d && Object.prototype.hasOwnProperty.call(d, 'hint')) {
+      $('jarMsg').textContent = hint;
+    }
+    if (hint === '瓶子是空的' || hint.indexOf('放不出') >= 0) shopTip(hint);
     if (hint.indexOf('先在瓶子') === 0 || hint === '该物品无法报价') {
       shopTip(hint);
       return;

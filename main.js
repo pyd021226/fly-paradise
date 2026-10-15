@@ -42,6 +42,7 @@ let overlay = null;
 let panel = null;
 let tray = null;
 let simWin = null;
+let shopWin = null;
 let swatterOn = false;
 let ragOn = false;
 let netOn = false;
@@ -372,6 +373,45 @@ function openSim() {
   simWin = win;
 }
 
+async function openShopWindow() {
+  if (isAnnoy) return;
+  try { await flyApi.ensureGuest(); } catch (e) { /* */ }
+  if (shopWin && !shopWin.isDestroyed()) {
+    shopWin.show();
+    shopWin.focus();
+    return;
+  }
+  let injected = false;
+  const win = new BrowserWindow({
+    width: 780,
+    height: 820,
+    minWidth: 420,
+    minHeight: 480,
+    autoHideMenuBar: true,
+    title: '交易市场',
+    icon: ICON,
+    backgroundColor: '#f4efe6',
+  });
+  win.setMenu(null);
+  win.loadURL('https://pyd021226.github.io/fly-paradise/shop.html');
+  win.webContents.on('did-finish-load', async () => {
+    if (injected) return;
+    const s = flyApi.getShopSession && flyApi.getShopSession();
+    if (!s || !s.access_token) return;
+    injected = true;
+    const raw = JSON.stringify(s);
+    try {
+      await win.webContents.executeJavaScript(
+        'localStorage.setItem("fly-shop-session", ' + JSON.stringify(raw) + '); location.reload();',
+      );
+    } catch (e) { injected = false; }
+  });
+  win.on('closed', () => {
+    if (shopWin === win) shopWin = null;
+  });
+  shopWin = win;
+}
+
 function overlayScreens() {
   if (!overlay || overlay.isDestroyed()) return [];
   const b = overlay.getBounds();
@@ -649,7 +689,7 @@ if (!app.requestSingleInstanceLock()) {
     } catch { /* first run */ }
     try {
       const run = JSON.parse(fs.readFileSync(SAVE_FILE, 'utf8'));
-      if (!isAnnoy && run && run.v === 1 && run.breed) {
+      if (!isAnnoy && run && run.v === 2 && run.breed) {
         savedRun = run;
         gate = true;
       }
@@ -746,7 +786,7 @@ if (!app.requestSingleInstanceLock()) {
       } else if (name === 'jarSelectAll' || name === 'jarFreeSel') {
         send('cmd', { name });
       } else if (name === 'openShop') {
-        if (!isAnnoy) shell.openExternal('https://pyd021226.github.io/fly-paradise/shop.html');
+        openShopWindow();
       } else if (name === 'jarSell') {
         if (!isAnnoy) send('cmd', { name: 'jarSell', note: msg.note || '', points: msg.points || '' });
       } else if (name === 'jarRestock') {
