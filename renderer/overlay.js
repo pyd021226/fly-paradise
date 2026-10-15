@@ -2716,7 +2716,6 @@ function wipeAt(x, y) {
   };
   splats = splats.filter((s) => !touch(s, 'splat', '#4a1020'));
   shells = shells.filter((s) => {
-    if (underIcon(s.x, s.y)) return true;
     const dx = s.x - x;
     const dy = s.y - y;
     if (dx * dx + dy * dy > r2) return true;
