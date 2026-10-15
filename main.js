@@ -381,7 +381,6 @@ async function openShopWindow() {
     shopWin.focus();
     return;
   }
-  let injected = false;
   const win = new BrowserWindow({
     width: 780,
     height: 820,
@@ -391,21 +390,13 @@ async function openShopWindow() {
     title: '交易市场',
     icon: ICON,
     backgroundColor: '#f4efe6',
+    webPreferences: {
+      preload: path.join(HERE, 'preload-shop.mjs'),
+      sandbox: false,
+    },
   });
   win.setMenu(null);
-  win.loadURL('https://pyd021226.github.io/fly-paradise/shop.html');
-  win.webContents.on('did-finish-load', async () => {
-    if (injected) return;
-    const s = flyApi.getShopSession && flyApi.getShopSession();
-    if (!s || !s.access_token) return;
-    injected = true;
-    const raw = JSON.stringify(s);
-    try {
-      await win.webContents.executeJavaScript(
-        'localStorage.setItem("fly-shop-session", ' + JSON.stringify(raw) + '); location.reload();',
-      );
-    } catch (e) { injected = false; }
-  });
+  win.loadFile(path.join(HERE, 'renderer', 'shop.html'));
   win.on('closed', () => {
     if (shopWin === win) shopWin = null;
   });
@@ -872,6 +863,7 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('fly-reject-offer', async (_e, arg) => flyApi.rejectOffer(arg.id));
     ipcMain.handle('fly-claim-offer', async (_e, arg) => flyApi.claimOffer(arg.id));
     ipcMain.handle('fly-get-points', async () => flyApi.getPoints());
+    ipcMain.handle('fly-shop-session', () => flyApi.getShopSession());
     ipcMain.handle('fly-buy-listing', async (_e, arg) => flyApi.buyListing(arg.id));
     ipcMain.handle('fly-simulate-clutch', async (_e, arg) => {
       try {

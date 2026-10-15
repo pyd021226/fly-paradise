@@ -33,6 +33,7 @@
       "server-client.js",
       "preload.mjs",
       "preload-panel.mjs",
+      "preload-shop.mjs",
       "package.json",
       "flavor.json",
       "renderer/**/*",

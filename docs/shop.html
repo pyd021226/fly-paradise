@@ -45,6 +45,7 @@
     <input id="email" type="email" placeholder="邮箱">
     <input id="password" type="password" placeholder="密码">
     <button class="primary" id="loginBtn" type="button">登录</button>
+    <button id="guestBtn" type="button">游客进入</button>
   </div>
   <div id="app">
     <div class="tabs">
@@ -332,6 +333,19 @@
     render();
   }
 
+  async function enterWith(s) {
+    if (!s || !s.access_token) return false;
+    token = s.access_token;
+    refreshTok = s.refresh_token || "";
+    email = s.email || "";
+    uid = s.uid || "";
+    saveSession();
+    document.getElementById("login").style.display = "none";
+    document.getElementById("app").style.display = "block";
+    await refresh();
+    return true;
+  }
+
   async function login() {
     const em = document.getElementById("email").value.trim();
     const pw = document.getElementById("password").value;
@@ -353,6 +367,26 @@
     await refresh();
   }
 
+  async function guestIn() {
+    tip("游客进入中…");
+    const id = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+    const em = "guest." + id + "@gmail.com";
+    const pw = "Gg" + id + "A1!" + id;
+    const body = await req("/auth/v1/signup", {
+      method: "POST",
+      headers: { apikey: ANON, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: em, password: pw }),
+    });
+    if (!body.access_token) throw new Error(body.error_description || body.msg || "游客进入失败");
+    tip("已进入");
+    await enterWith({
+      access_token: body.access_token,
+      refresh_token: body.refresh_token || "",
+      email: (body.user && body.user.email) || em,
+      uid: (body.user && body.user.id) || "",
+    });
+  }
+
   const cats = document.getElementById("cats");
   CATS.forEach((c) => {
     const b = document.createElement("button");
@@ -372,20 +406,32 @@
   document.getElementById("tabMall").onclick = () => setTab("mall");
   document.getElementById("logout").onclick = () => kickLogin("已退出");
   document.getElementById("loginBtn").onclick = () => login().catch((e) => tip(e.message));
+  document.getElementById("guestBtn").onclick = () => guestIn().catch((e) => tip(e.message));
 
-  try {
-    const s = JSON.parse(localStorage.getItem(KEY) || "null");
-    if (s && (s.access_token || s.refresh_token)) {
-      token = s.access_token || "";
-      refreshTok = s.refresh_token || "";
-      email = s.email || "";
-      uid = s.uid || "";
-      document.getElementById("login").style.display = "none";
-      document.getElementById("app").style.display = "block";
-      ensureToken().then(function (ok) {
+  (async function boot() {
+    try {
+      if (window.shopBridge && window.shopBridge.session) {
+        const s = await window.shopBridge.session();
+        if (s && s.access_token) {
+          tip("已用游戏账号进入");
+          await enterWith(s);
+          return;
+        }
+      }
+    } catch (e) {}
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (s && (s.access_token || s.refresh_token)) {
+        token = s.access_token || "";
+        refreshTok = s.refresh_token || "";
+        email = s.email || "";
+        uid = s.uid || "";
+        document.getElementById("login").style.display = "none";
+        document.getElementById("app").style.display = "block";
+        const ok = await ensureToken();
         if (!ok) { kickLogin("登录已过期，请重新登录"); return; }
-        return refresh();
-      }).catch(function (e) { tip(e.message); });
-    }
-  } catch (e) {}
+        await refresh();
+      }
+    } catch (e) {}
+  })();
 </script>
