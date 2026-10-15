@@ -1934,23 +1934,38 @@ function throwNet(now) {
 }
 
 function catchNet(now) {
-  for (const f of flies) {
-    if (f.state === 'dead') continue;
-    if (!inNet(f.x, f.y)) continue;
-    interruptEat(f);
-    intoJar('fly', f);
-    f.state = 'dead';
+  let best = null;
+  let bestD = NET_R + 0.01;
+  const consider = (item, kind, x, y) => {
+    if (!item || item.state === 'dead') return;
+    const d = Math.hypot(x - netCx, y - netCy);
+    if (d > NET_R) return;
+    if (d < bestD) {
+      bestD = d;
+      best = { item, kind };
+    }
+  };
+  for (const f of flies) consider(f, 'fly', f.x, f.y);
+  for (const e of eggs) consider(e, 'egg', e.x, e.y);
+  for (const L of larvae) consider(L, 'larva', L.x, L.y);
+  for (const p of pupae) consider(p, 'pupa', p.x, p.y);
+  if (!best) return;
+  const it = best.item;
+  if (best.kind === 'fly') {
+    interruptEat(it);
+    intoJar('fly', it);
+    it.state = 'dead';
+    flies = flies.filter((f) => f.state !== 'dead');
+  } else if (best.kind === 'egg') {
+    intoJar('egg', it);
+    eggs = eggs.filter((e) => e !== it);
+  } else if (best.kind === 'larva') {
+    intoJar('larva', it);
+    larvae = larvae.filter((L) => L !== it);
+  } else if (best.kind === 'pupa') {
+    intoJar('pupa', it);
+    pupae = pupae.filter((p) => p !== it);
   }
-  flies = flies.filter((f) => f.state !== 'dead');
-
-  for (const e of eggs) if (inNet(e.x, e.y)) intoJar('egg', e);
-  eggs = eggs.filter((e) => !inNet(e.x, e.y));
-
-  for (const L of larvae) if (inNet(L.x, L.y)) intoJar('larva', L);
-  larvae = larvae.filter((L) => !inNet(L.x, L.y));
-
-  for (const p of pupae) if (inNet(p.x, p.y)) intoJar('pupa', p);
-  pupae = pupae.filter((p) => !inNet(p.x, p.y));
 }
 
 function bounceJar(u) {
@@ -3855,6 +3870,10 @@ function snapshot() {
     o.crawlTo = null;
     o.crawling = false;
     o.eatingFood = 0;
+    if (o.state === 'perch' || o.state === 'eat') {
+      o.state = 'fly';
+      o.mission = 'land';
+    }
     return o;
   };
   return {
@@ -3902,6 +3921,13 @@ function applyRestore(data) {
   rainbowSeen = !!data.rainbowSeen;
   nextId = Number(data.nextId) || 1;
   flies = (data.flies || []).map((f) => unpackTimes({ ...f, perch: null, target: null, crawling: false, eatingFood: 0 }, FLY_TS, now));
+  for (const f of flies) {
+    if (f.state === 'perch' || f.state === 'eat') {
+      f.state = 'fly';
+      f.mission = 'land';
+      f.perch = null;
+    }
+  }
   eggs = (data.eggs || []).map((e) => unpackTimes({ ...e }, ['t'], now));
   larvae = (data.larvae || []).map((L) => unpackTimes({ ...L, eatingFood: 0 }, ['nextTurn'], now));
   pupae = (data.pupae || []).map((p) => unpackTimes({ ...p }, ['t'], now));
