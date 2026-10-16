@@ -352,10 +352,12 @@
 
   async function refresh() {
     syncMe();
-    listings = await req("/rest/v1/listings?status=eq.open&select=id,seller_id,seller_email,kind,color,note,want,quantity,fly_id,fly_ids&order=created_at.desc&limit=80");
+    const rows = await req("/rest/v1/listings?status=eq.open&select=id,seller_id,seller_email,kind,color,note,want,quantity,fly_id,fly_ids&order=created_at.desc&limit=80");
+    listings = Array.isArray(rows) ? rows : [];
     allOffers = [];
     render();
   }
+  window.shopRefresh = refresh;
 
   async function enterWith(s) {
     if (!s || !s.access_token) return false;
@@ -430,6 +432,12 @@
   document.getElementById("tabMall").onclick = () => setTab("mall");
   document.getElementById("logout").onclick = () => kickLogin("已退出");
   document.getElementById("loginBtn").onclick = () => login().catch((e) => tip(e.message));
+  window.addEventListener("focus", () => {
+    if (token) refresh().catch(function () {});
+  });
+  setInterval(() => {
+    if (token && document.getElementById("app").style.display === "block") refresh().catch(function () {});
+  }, 5000);
 
   (async function boot() {
     try {

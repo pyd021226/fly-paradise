@@ -396,6 +396,7 @@ async function openShopWindow() {
   if (shopWin && !shopWin.isDestroyed()) {
     shopWin.show();
     shopWin.focus();
+    shopWin.webContents.executeJavaScript('window.shopRefresh && window.shopRefresh()').catch(() => {});
     return;
   }
   const win = new BrowserWindow({
