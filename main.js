@@ -867,7 +867,7 @@ if (!app.requestSingleInstanceLock()) {
           quitTimer = setTimeout(() => {
             quitArmed = 0;
             quitTimer = null;
-            send('cmd', { name: 'stealth', ms: 5000 });
+            send('cmd', { name: 'stealth', ms: 120000 });
             hideToTray();
           }, 500);
         } else if (quitArmed >= 3) {
