@@ -390,12 +390,23 @@ function openSim() {
   simWin = win;
 }
 
+function injectShopSession(win) {
+  try {
+    const s = flyApi.getShopSession();
+    if (!s || !s.access_token || !win || win.isDestroyed()) return;
+    win.webContents.executeJavaScript(
+      `window.enterShopSession && window.enterShopSession(${JSON.stringify(s)})`
+    ).catch(() => {});
+  } catch { /* */ }
+}
+
 async function openShopWindow() {
   if (isAnnoy) return;
-  try { await flyApi.ensureGuest(); } catch (e) { /* */ }
   if (shopWin && !shopWin.isDestroyed()) {
     shopWin.show();
     shopWin.focus();
+    try { await flyApi.ensureGuest(); } catch { /* */ }
+    injectShopSession(shopWin);
     shopWin.webContents.executeJavaScript('window.shopRefresh && window.shopRefresh()').catch(() => {});
     return;
   }
@@ -419,6 +430,10 @@ async function openShopWindow() {
     if (shopWin === win) shopWin = null;
   });
   shopWin = win;
+  const ready = flyApi.ensureGuest().catch(() => {});
+  win.webContents.once('did-finish-load', () => {
+    ready.then(() => injectShopSession(win));
+  });
 }
 
 function overlayScreens() {
@@ -890,22 +905,28 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('fly-submit-mutation', async (_e, arg) => flyApi.submitMutation(arg.flyId));
     ipcMain.handle('fly-leaderboard', async () => flyApi.getLeaderboard());
     ipcMain.handle('fly-add-point', async (_e, arg) => flyApi.addPoint(arg.n));
-    ipcMain.handle('fly-create-listing', async (_e, arg) => flyApi.createListing(arg.kind, arg.flyIds, arg.note, arg.want, arg.instar, arg.color));
+    ipcMain.handle('fly-create-listing', async (_e, arg) => flyApi.createListing(arg.kind, arg.flyIds, arg.note, arg.want, arg.instar, arg.color, arg.genes));
     ipcMain.handle('fly-list-listings', async () => flyApi.listListings());
     ipcMain.handle('fly-unlist-listing', async (_e, arg) => flyApi.unlistListing(arg.id));
+    function restockToJar(items) {
+      if (!items || !items.length) return;
+      captureOpen = true;
+      send('cmd', { name: 'capture', value: true });
+      sendBottleRect();
+      send('cmd', { name: 'jarRestock', items });
+      if (panel && !panel.isDestroyed()) {
+        panel.show();
+        panel.webContents.send('open-capture');
+      }
+    }
     ipcMain.handle('fly-shop-unlist', async (_e, arg) => {
       const res = await flyApi.unlistListing(arg && arg.id);
-      if (res && res.ok) {
-        const items = (res.data && res.data.items) || [];
-        captureOpen = true;
-        send('cmd', { name: 'capture', value: true });
-        sendBottleRect();
-        send('cmd', { name: 'jarRestock', items });
-        if (panel && !panel.isDestroyed()) {
-          panel.show();
-          panel.webContents.send('open-capture');
-        }
-      }
+      if (res && res.ok) restockToJar((res.data && res.data.items) || []);
+      return res;
+    });
+    ipcMain.handle('fly-shop-buy', async (_e, arg) => {
+      const res = await flyApi.buyListing(arg && arg.id);
+      if (res && res.ok) restockToJar((res.data && res.data.items) || []);
       return res;
     });
     ipcMain.handle('fly-create-offer', async (_e, arg) => flyApi.createOffer(arg.listingId, arg.kind, arg.flyIds, arg.note, arg.color, arg.instar));

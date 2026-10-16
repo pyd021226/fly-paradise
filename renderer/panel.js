@@ -553,7 +553,6 @@ async function loadPoints() {
 }
 
 let shopPoll = 0;
-const processedOffers = new Set();
 
 function openCapture() {
   if (captureOpen) return;
@@ -562,51 +561,8 @@ function openCapture() {
   api.send('capture', { open: true });
 }
 
-function restockOfferItems(ids, kind, color, tip) {
-  if (!ids || !ids.length) return;
-  openCapture();
-  api.send('jarRestock', { items: ids.map((fid) => ({ kind: kind || 'fly', serverId: fid, color: color || 'wild', codon: '', instar: 1 })) });
-  shopTip(tip);
-}
-
-async function myEmail() {
-  if (api.currentUser) {
-    try {
-      const u = await api.currentUser();
-      if (u && u.ok && u.email) return String(u.email);
-    } catch (e) { /* */ }
-  }
-  return ($('loginEmail') && $('loginEmail').value.trim()) || '';
-}
-
 async function loadShop() {
   if (isAnnoy) return;
-  const me = (await myEmail()).toLowerCase();
-  let offers = [];
-  try {
-    if (api.listOffers) {
-      const oRes = await api.listOffers();
-      if (oRes && oRes.ok) offers = (oRes.data && oRes.data.offers) || [];
-    }
-  } catch (e) {
-    offers = [];
-  }
-  const btn = $('openShop');
-  if (btn) btn.classList.remove('dot');
-  for (const o of offers) {
-    if (processedOffers.has(o.id + o.status)) continue;
-    const listed = o.listings || {};
-    const buyer = (o.buyer_email || '').toLowerCase();
-    if (o.status === 'accepted' && buyer === me) {
-      const ids = (Array.isArray(listed.fly_ids) && listed.fly_ids.length)
-        ? listed.fly_ids
-        : (Array.isArray(o.fly_ids) && o.fly_ids.length)
-          ? o.fly_ids
-          : (listed.fly_id ? [listed.fly_id] : (o.fly_id ? [o.fly_id] : []));
-      restockOfferItems(ids, listed.kind || o.kind || 'fly', listed.color || o.color || 'wild', '买到了，已进瓶子');
-      processedOffers.add(o.id + o.status);
-    }
-  }
   loadPoints();
 }
 

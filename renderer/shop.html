@@ -78,7 +78,7 @@
     { id: "item", label: "道具", kinds: ["item"] },
   ];
   let token = "", refreshTok = "", email = "", uid = "", tipTimer = 0;
-  let listings = [], allOffers = [], cat = "all", q = "";
+  let listings = [], cat = "all", q = "";
 
   function reportShop(msg) {
     try {
@@ -230,22 +230,6 @@
     return blob.indexOf(s) >= 0;
   }
 
-  function qtyOf(o) {
-    if (Number(o.quantity) > 0) return Number(o.quantity);
-    if (Array.isArray(o.fly_ids) && o.fly_ids.length) return o.fly_ids.length;
-    return 1;
-  }
-  function busyFlyIds() {
-    const s = new Set();
-    for (const o of allOffers) {
-      if (o.status !== "pending") continue;
-      if (o.buyer_email !== email && o.buyer_id !== uid) continue;
-      const ids = (Array.isArray(o.fly_ids) && o.fly_ids.length) ? o.fly_ids : (o.fly_id ? [o.fly_id] : []);
-      ids.forEach((id) => s.add(id));
-    }
-    return s;
-  }
-
   function drawThumb(cv, kind, color, qty) {
     const ctx = cv.getContext("2d");
     const w = cv.width, h = cv.height;
@@ -301,7 +285,7 @@
     note.textContent = l.note || kindLabel(l.kind);
     const who = document.createElement("div"); who.className = "who";
     const price = Math.floor(Number(l.want) || 0);
-    who.textContent = kindLabel(l.kind) + " · " + (l.seller_email || "").split("@")[0] + " · ×" + (l.quantity || 1) + (price > 0 ? (" · " + price + "积分") : " · 未标积分");
+    who.textContent = kindLabel(l.kind) + " · " + (l.seller_email || "").split("@")[0] + " · ×" + (l.quantity || 1) + (price > 0 ? (" · " + price + "积分") : " · 未标积分") + (l.codon ? (" · " + l.codon) : "");
     const row = document.createElement("div"); row.className = "row";
     card.append(note, who, row);
     if (!withBid) {
@@ -327,8 +311,14 @@
       bid.textContent = "用" + price + "积分购买";
       bid.onclick = async () => {
         try {
-          await req("/rest/v1/rpc/buy_listing", { method: "POST", body: JSON.stringify({ p_listing_id: l.id }) });
-          tip("已买到。打开游戏捕捉瓶，货会进瓶子。");
+          if (window.shopBridge && window.shopBridge.buy) {
+            const r = await window.shopBridge.buy(l.id);
+            if (!r || !r.ok) throw new Error((r && r.error) || "购买失败");
+            tip("已买到，货进瓶子");
+          } else {
+            await req("/rest/v1/rpc/buy_listing", { method: "POST", body: JSON.stringify({ p_listing_id: l.id }) });
+            tip("已买到。打开游戏捕捉瓶，货会进瓶子。");
+          }
           await refresh();
         } catch (e) { tip("购买失败：" + e.message); }
       };
@@ -361,7 +351,6 @@
     syncMe();
     const rows = await req("/rest/v1/listings?status=eq.open&select=id,seller_id,seller_email,kind,color,note,want,quantity,fly_id,fly_ids&order=created_at.desc&limit=80");
     listings = Array.isArray(rows) ? rows : [];
-    allOffers = [];
     render();
   }
   window.shopRefresh = refresh;
@@ -378,6 +367,7 @@
     await refresh();
     return true;
   }
+  window.enterShopSession = enterWith;
 
   async function login() {
     const em = document.getElementById("email").value.trim();
@@ -398,26 +388,6 @@
     document.getElementById("app").style.display = "block";
     tip("已登录");
     await refresh();
-  }
-
-  async function guestIn() {
-    tip("游客进入中…");
-    const id = Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-    const em = "guest." + id + "@gmail.com";
-    const pw = "Gg" + id + "A1!" + id;
-    const body = await req("/auth/v1/signup", {
-      method: "POST",
-      headers: { apikey: ANON, "Content-Type": "application/json" },
-      body: JSON.stringify({ email: em, password: pw }),
-    });
-    if (!body.access_token) throw new Error(body.error_description || body.msg || "游客进入失败");
-    tip("已进入");
-    await enterWith({
-      access_token: body.access_token,
-      refresh_token: body.refresh_token || "",
-      email: (body.user && body.user.email) || em,
-      uid: (body.user && body.user.id) || "",
-    });
   }
 
   const cats = document.getElementById("cats");

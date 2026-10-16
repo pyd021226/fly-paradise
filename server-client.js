@@ -232,6 +232,23 @@ export async function addPoint(n) {
   return call('add-point', { n });
 }
 
+function listingItems(row) {
+  const ids = (Array.isArray(row.fly_ids) && row.fly_ids.length)
+    ? row.fly_ids
+    : (row.fly_id ? [row.fly_id] : []);
+  const one = ids.length ? ids : [null];
+  return one.map((fid) => ({
+    kind: row.kind || 'fly',
+    serverId: fid,
+    color: row.color || 'wild',
+    codon: row.codon || '',
+    geno: row.geno || '',
+    gene_d: row.gene_d,
+    gene_p: row.gene_p,
+    instar: row.instar || 1,
+  }));
+}
+
 function tokenUser() {
   const p = decodeJwt(accessToken);
   if (!p || !p.sub) return null;
@@ -248,7 +265,7 @@ function authHeaders(extra) {
   };
 }
 
-export async function createListing(kind, flyIds, note, want, instar, color) {
+export async function createListing(kind, flyIds, note, want, instar, color, genes) {
   if (!(await ensureToken())) {
     const g = await ensureGuest();
     if (!g.ok) return { ok: false, error: g.error || '游客上架失败' };
@@ -272,23 +289,46 @@ export async function createListing(kind, flyIds, note, want, instar, color) {
       for (const x of row.fly_ids || []) taken.add(x);
     }
     if (ids.some((id) => taken.has(id))) return { ok: false, error: '已经上架过了' };
+    const g = genes || {};
+    const payload = {
+      seller_id: me.id,
+      seller_email: me.email,
+      kind,
+      fly_id: ids[0],
+      fly_ids: ids,
+      quantity: ids.length,
+      instar: instar || null,
+      color: color || 'wild',
+      note: String(note || '').trim(),
+      want: String(price),
+      status: 'open',
+      codon: String(g.codon || ''),
+      geno: String(g.geno || ''),
+      gene_d: g.gene_d == null ? null : Number(g.gene_d),
+      gene_p: g.gene_p == null ? null : Number(g.gene_p),
+    };
     res = await fetchTimeout(`${URL}/rest/v1/listings`, {
       method: 'POST',
       headers: authHeaders({ Prefer: 'return=representation' }),
-      body: JSON.stringify({
-        seller_id: me.id,
-        seller_email: me.email,
-        kind,
-        fly_id: ids[0],
-        fly_ids: ids,
-        quantity: ids.length,
-        instar: instar || null,
-        color: color || 'wild',
-        note: String(note || '').trim(),
-        want: String(price),
-        status: 'open',
-      }),
+      body: JSON.stringify(payload),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = String(err.message || err.error || '');
+      if (/codon|geno|gene_d|gene_p|schema cache|PGRST204|column/i.test(msg)) {
+        delete payload.codon;
+        delete payload.geno;
+        delete payload.gene_d;
+        delete payload.gene_p;
+        res = await fetchTimeout(`${URL}/rest/v1/listings`, {
+          method: 'POST',
+          headers: authHeaders({ Prefer: 'return=representation' }),
+          body: JSON.stringify(payload),
+        });
+      } else {
+        return { ok: false, error: msg || '上架失败' };
+      }
+    }
   } catch (e) {
     return { ok: false, error: e.timeout ? '请求超时' : (e.message || '上架失败') };
   }
@@ -343,15 +383,7 @@ export async function unlistListing(id) {
   }
   const rows = await res.json().catch(() => []);
   const row = rows[0] || {};
-  const ids = (Array.isArray(row.fly_ids) && row.fly_ids.length) ? row.fly_ids : (row.fly_id ? [row.fly_id] : []);
-  const items = ids.map((fid) => ({
-    kind: row.kind || 'fly',
-    serverId: fid,
-    color: row.color || 'wild',
-    codon: '',
-    instar: row.instar || 1,
-  }));
-  return { ok: true, data: { ok: true, items } };
+  return { ok: true, data: { ok: true, items: listingItems(row) } };
 }
 
 export async function createOffer(listingId, kind, flyIds, note, color, instar) {
@@ -480,7 +512,7 @@ export async function buyListing(id) {
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, error: data.message || data.error || '购买失败' };
-  return { ok: true, data };
+  return { ok: true, data: { ...data, items: listingItems(data) } };
 }
 
 let lastBug = '';

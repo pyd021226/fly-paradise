@@ -18,7 +18,7 @@ contextBridge.exposeInMainWorld('panel', {
   acceptOffer: (id) => ipcRenderer.invoke('fly-accept-offer', { id }),
   rejectOffer: (id) => ipcRenderer.invoke('fly-reject-offer', { id }),
   claimOffer: (id) => ipcRenderer.invoke('fly-claim-offer', { id }),
-  createListing: (kind, flyIds, note, want, instar, color) => ipcRenderer.invoke('fly-create-listing', { kind, flyIds, note, want, instar, color }),
+  createListing: (kind, flyIds, note, want, instar, color, genes) => ipcRenderer.invoke('fly-create-listing', { kind, flyIds, note, want, instar, color, genes }),
   addPoint: (n) => ipcRenderer.invoke('fly-add-point', { n }),
   getPoints: () => ipcRenderer.invoke('fly-get-points'),
   buyListing: (id) => ipcRenderer.invoke('fly-buy-listing', { id }),

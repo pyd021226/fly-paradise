@@ -24,7 +24,7 @@ contextBridge.exposeInMainWorld('fly', {
   submitRecord: (timeMs) => ipcRenderer.invoke('fly-submit-record', { timeMs }),
   submitMutation: (flyId) => ipcRenderer.invoke('fly-submit-mutation', { flyId }),
   addPoint: (n) => ipcRenderer.invoke('fly-add-point', { n }),
-  createListing: (kind, flyIds, note, want, instar, color) => ipcRenderer.invoke('fly-create-listing', { kind, flyIds, note, want, instar, color }),
+  createListing: (kind, flyIds, note, want, instar, color, genes) => ipcRenderer.invoke('fly-create-listing', { kind, flyIds, note, want, instar, color, genes }),
   unlistListing: (id) => ipcRenderer.invoke('fly-unlist-listing', { id }),
   reportBug: (message, extra) => ipcRenderer.invoke('fly-report-bug', { message, extra }),
 });

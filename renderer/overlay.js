@@ -618,7 +618,7 @@ function spawnFly(x, y, opts = {}) {
     sex: opts.sex || (Math.random() < 0.5 ? 'm' : 'f'),
     serverId: opts.serverId || null,
     color: opts.color || 'wild',
-    codon: opts.codon || '1',
+    codon: opts.codon == null ? '1' : String(opts.codon),
     gene_d: opts.gene_d == null ? 1 : opts.gene_d,
     gene_p: opts.gene_p == null ? 1 : opts.gene_p,
     blood: opts.blood || {},
@@ -2039,9 +2039,9 @@ async function sellSelectedJar(note, points) {
   }
   for (const u of units) {
     if (u.serverId) continue;
-    if (!window.fly || !window.fly.spawnFly) { jarHint = '该物品无法上架'; publishJar(); return; }
-    const spawned = await window.fly.spawnFly();
-    if (spawned && spawned.ok && spawned.fly) u.serverId = spawned.fly.id;
+    u.serverId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : ('00000000-0000-4000-8000-' + String(Date.now()).padStart(12, '0').slice(-12));
   }
   const ready = units.filter((u) => u.serverId);
   if (!ready.length) { jarHint = '游客上架失败：没有服务器编号'; publishJar(); return; }
@@ -2057,7 +2057,12 @@ async function sellSelectedJar(note, points) {
   publishJar();
   let res;
   try {
-    res = await window.fly.createListing(kind, flyIds, caption, want, limited[0].instar || null, limited[0].color || 'wild');
+    res = await window.fly.createListing(kind, flyIds, caption, want, limited[0].instar || null, limited[0].color || 'wild', {
+      codon: limited[0].codon || '',
+      geno: limited[0].geno || '',
+      gene_d: limited[0].gene_d,
+      gene_p: limited[0].gene_p,
+    });
   } finally {
     listingBusy = false;
   }
@@ -2086,6 +2091,10 @@ function restockJar(items) {
       serverId: sid,
       color: it.color || 'wild',
       codon: it.codon || '',
+      geno: it.geno || '',
+      gene_d: it.gene_d,
+      gene_p: it.gene_p,
+      blood: it.blood,
       instar: it.instar || 1,
     });
   }
@@ -2340,24 +2349,22 @@ function drawBottle(now) {
     }
   }
   ctx.restore();
-  if (showCodons) {
-    ctx.save();
-    ctx.font = '11px "Consolas", "Microsoft YaHei", monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'rgba(255,255,255,0.92)';
-    ctx.fillStyle = 'rgba(0,0,0,0.82)';
-    for (const u of jar) {
-      const code = u.codon || '';
-      if (!code) continue;
-      const x = b.x + pad + u.x * spaceScale;
-      const y = b.y + pad + u.y * spaceScaleY - 10;
-      ctx.strokeText(code, x, y);
-      ctx.fillText(code, x, y);
-    }
-    ctx.restore();
+  ctx.save();
+  ctx.font = '11px "Consolas", "Microsoft YaHei", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+  ctx.fillStyle = 'rgba(0,0,0,0.82)';
+  for (const u of jar) {
+    const code = u.codon || '';
+    if (!code) continue;
+    const x = b.x + pad + u.x * spaceScale;
+    const y = b.y + pad + u.y * spaceScaleY - 10;
+    ctx.strokeText(code, x, y);
+    ctx.fillText(code, x, y);
   }
+  ctx.restore();
 }
 
 function bottleAt(x, y) {
