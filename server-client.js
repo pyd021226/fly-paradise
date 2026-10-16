@@ -235,7 +235,8 @@ export async function addPoint(n) {
 function tokenUser() {
   const p = decodeJwt(accessToken);
   if (!p || !p.sub) return null;
-  return { id: p.sub, email: p.email || sessionEmail || '' };
+  const em = p.email || (p.user_metadata && p.user_metadata.email) || sessionEmail || '';
+  return { id: p.sub, email: em };
 }
 
 function authHeaders(extra) {

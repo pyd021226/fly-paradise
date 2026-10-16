@@ -138,14 +138,18 @@
   function syncMe() {
     const p = jwtPayload();
     if (p && p.sub) uid = p.sub;
-    if (p && p.email) email = p.email;
+    const em = (p && (p.email || (p.user_metadata && p.user_metadata.email))) || email;
+    if (em) email = em;
   }
   function isMine(l) {
     syncMe();
-    const sid = String(l.seller_id || "");
+    const sid = String(l.seller_id || "").toLowerCase();
     const sem = String(l.seller_email || "").toLowerCase();
+    const meId = String(uid || "").toLowerCase();
     const me = String(email || "").toLowerCase();
-    return (sid && uid && sid === String(uid)) || (sem && me && sem === me);
+    if (sid && meId && sid === meId) return true;
+    if (sem && me && sem === me) return true;
+    return false;
   }
   async function refreshAccess() {
     if (!refreshTok) return false;
