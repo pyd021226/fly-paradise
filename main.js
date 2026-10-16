@@ -34,8 +34,10 @@ const isAnnoy = flavor === 'annoy';
 let STATS_FILE = '';
 let SAVE_FILE = '';
 let SETTINGS_FILE = '';
+let ASSETS_FILE = '';
 let greenPeak = 0;
 let savedRun = null;
+let cleanerHeld = 0;
 let gate = false;
 let breed = !isAnnoy;
 let autoStart = isAnnoy;
@@ -143,6 +145,18 @@ function loadSettings() {
 
 function saveSettings() {
   try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify({ openAtLogin: autoStart })); } catch { /* */ }
+}
+
+function loadAssets() {
+  try {
+    const s = JSON.parse(fs.readFileSync(ASSETS_FILE, 'utf8'));
+    cleanerHeld = Math.max(0, Math.floor(Number(s.cleanerLeft) || 0));
+  } catch { cleanerHeld = 0; }
+}
+
+function saveAssets() {
+  if (!ASSETS_FILE) return;
+  try { fs.writeFileSync(ASSETS_FILE, JSON.stringify({ cleanerLeft: cleanerHeld })); } catch { /* */ }
 }
 
 function writeSave(data) {
@@ -704,8 +718,10 @@ if (!app.requestSingleInstanceLock()) {
     STATS_FILE = path.join(app.getPath('userData'), 'fly-stats.json');
     SAVE_FILE = path.join(app.getPath('userData'), 'fly-save.json');
     SETTINGS_FILE = path.join(app.getPath('userData'), 'fly-settings.json');
+    ASSETS_FILE = path.join(app.getPath('userData'), 'fly-assets.json');
     flyApi.initSession(path.join(app.getPath('userData'), 'fly-session.json'));
     loadSettings();
+    loadAssets();
     applyAutoStart();
     try {
       const s = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
@@ -721,7 +737,7 @@ if (!app.requestSingleInstanceLock()) {
     overlay = createOverlay(virtualBounds());
     overlay.webContents.once('did-finish-load', () => {
       publishGeometry();
-      send('cmd', { name: 'configure', annoy: isAnnoy, watch, breed });
+      send('cmd', { name: 'configure', annoy: isAnnoy, watch, breed, cleanerLeft: cleanerHeld });
       if (!gate) send('cmd', { name: 'startFresh' });
       applyLayer();
       sendBottleRect();
@@ -774,6 +790,13 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on('swatter-off', putAwaySwatter);
 
     ipcMain.on('life-stats', (_e, s) => {
+      if (s && s.cleanerLeft != null) {
+        const n = Math.max(0, Math.floor(Number(s.cleanerLeft) || 0));
+        if (n !== cleanerHeld) {
+          cleanerHeld = n;
+          saveAssets();
+        }
+      }
       if (panel && !panel.isDestroyed()) {
         panel.webContents.send('life-stats', s || {});
       }
@@ -926,7 +949,10 @@ if (!app.requestSingleInstanceLock()) {
     });
     ipcMain.handle('fly-shop-buy', async (_e, arg) => {
       const res = await flyApi.buyListing(arg && arg.id);
-      if (res && res.ok) restockToJar((res.data && res.data.items) || []);
+      if (res && res.ok) {
+        restockToJar((res.data && res.data.items) || []);
+        send('cmd', { name: 'syncPoints' });
+      }
       return res;
     });
     ipcMain.handle('fly-create-offer', async (_e, arg) => flyApi.createOffer(arg.listingId, arg.kind, arg.flyIds, arg.note, arg.color, arg.instar));

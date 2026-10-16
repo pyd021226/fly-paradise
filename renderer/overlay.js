@@ -1660,6 +1660,14 @@ function buyCleaner() {
   return true;
 }
 
+async function syncPoints() {
+  if (!window.fly || !window.fly.getPoints) return;
+  try {
+    const r = await window.fly.getPoints();
+    if (r && r.ok && r.data) localPoints = Number(r.data.amount) || 0;
+  } catch { /* */ }
+}
+
 function beginPair(a, b, now) {
   if (!a || !b || a.id === b.id || a.sex === b.sex) return;
   if (a.mateSeek || b.mateSeek) return;
@@ -3957,11 +3965,14 @@ function applyRestore(data) {
   splats = (data.splats || []).map((s) => unpackTimes({ ...s }, ['t'], now));
   ragUses = Number(data.ragUses) || 0;
   washLeftMs = Number(data.washLeftMs) || 0;
+  if (data.points != null) localPoints = Number(data.points) || 0;
+  if (data.cleanerLeft != null) cleanerLeft = Number(data.cleanerLeft) || 0;
   jar = (data.jar || []).map((u) => unpackTimes({ ...u }, ['t'], now));
   booted = true;
   holdBoot = false;
   extinctSince = 0;
   syncBinFood();
+  syncPoints();
 }
 
 function flushSave() {
@@ -3982,6 +3993,7 @@ function startFresh() {
   jar = [];
   jarHint = '';
   if (!booted && icons.length) boot();
+  syncPoints();
 }
 
 function frame(now) {
@@ -4172,6 +4184,8 @@ if (api) {
       flavorAnnoy = !!d.annoy;
       breed = d.breed != null ? !!d.breed : !flavorAnnoy;
       if (d.watch != null) watch = !!d.watch;
+      if (d.cleanerLeft != null) cleanerLeft = Math.max(0, Math.floor(Number(d.cleanerLeft) || 0));
+      syncPoints();
     }
     if (d.name === 'watch') watch = !!d.value;
     if (d.name === 'wash') {
@@ -4201,14 +4215,19 @@ if (api) {
     if (d.name === 'buyWhite') buyWhiteFly();
     if (d.name === 'buyCleaner') buyCleaner();
     if (d.name === 'cleaner') cleanerOn = !!d.value;
-    if (d.name === 'loggedIn') spawnServerFlies();
+    if (d.name === 'loggedIn') {
+      spawnServerFlies();
+      syncPoints();
+    }
     if (d.name === 'guest') {
       holdBoot = false;
       if (!booted && icons.length) boot();
+      syncPoints();
     }
     if (d.name === 'boot') boot();
     if (d.name === 'startFresh') startFresh();
     if (d.name === 'restore' && d.data) applyRestore(d.data);
+    if (d.name === 'syncPoints') syncPoints();
     if (d.name === 'flush') flushSave();
     if (d.name === 'stealth') stealthUntil = performance.now() + (Number(d.ms) || 120000);
   });

@@ -151,8 +151,8 @@ if (api.onOpenCapture) {
 }
 $('xray').onclick = () => api.send('xray');
 $('autoStart').onchange = () => api.send('autostart');
-$('resume').onclick = () => api.send('resume');
-$('restart').onclick = () => api.send('restart');
+$('resume').onclick = () => { api.send('resume'); loadPoints(); };
+$('restart').onclick = () => { api.send('restart'); loadPoints(); };
 $('sexM').onchange = () => setSex($('sexM').checked ? 'm' : 'f');
 $('sexF').onchange = () => setSex($('sexF').checked ? 'f' : 'm');
 $('add').onclick = () => api.send('addFly', { sex });
