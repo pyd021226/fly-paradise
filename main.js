@@ -764,7 +764,7 @@ if (!app.requestSingleInstanceLock()) {
         if (!toolOn()) trackDesktopClicks();
       }, 50);
       pinTimer = setInterval(() => {
-        if (!overlay || overlay.isDestroyed() || toolOn()) return;
+        if (!overlay || overlay.isDestroyed()) return;
         applyLayer();
       }, 2000);
     }, 800);

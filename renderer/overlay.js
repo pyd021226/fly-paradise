@@ -2736,11 +2736,9 @@ function iconBlocksWipe(x, y) {
 
 function wipeAt(x, y) {
   if (washLeftMs > 0) return;
-  if (iconBlocksWipe(x, y)) return;
   const r2 = RAG_R * RAG_R;
   const nowOn = new Set();
   const touch = (s, kind, fallback) => {
-    if (iconBlocksWipe(s.x, s.y)) return false;
     const dx = s.x - x;
     const dy = s.y - y;
     const hit = dx * dx + dy * dy <= r2;

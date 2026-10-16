@@ -17,7 +17,6 @@ const SetWindowPos = user32.func(
 );
 
 const GA_ROOT = 2;
-const HWND_BOTTOM = 1;
 const SWP_NOSIZE = 0x0001;
 const SWP_NOMOVE = 0x0002;
 const SWP_NOACTIVATE = 0x0010;
@@ -62,11 +61,43 @@ function nativeHwnd(win) {
   }
 }
 
+const FindWindowExW = user32.func(
+  'void *__stdcall FindWindowExW(void *hWndParent, void *hWndChildAfter, void *lpszClass, void *lpszWindow)',
+);
+
+function wchar(s) {
+  return Buffer.from(String(s) + '\0', 'utf16le');
+}
+
+function findDefView() {
+  const progman = FindWindowExW(null, null, wchar('Progman'), null);
+  let view = hwndVal(progman) ? FindWindowExW(progman, null, wchar('SHELLDLL_DefView'), null) : null;
+  if (hwndVal(view)) return view;
+  let worker = FindWindowExW(null, null, wchar('WorkerW'), null);
+  while (hwndVal(worker)) {
+    view = FindWindowExW(worker, null, wchar('SHELLDLL_DefView'), null);
+    if (hwndVal(view)) return view;
+    worker = FindWindowExW(null, worker, wchar('WorkerW'), null);
+  }
+  return null;
+}
+
+function findDesktopIconLayer() {
+  const view = findDefView();
+  if (!hwndVal(view)) return null;
+  const lv = FindWindowExW(view, null, wchar('SysListView32'), null);
+  if (hwndVal(lv)) return lv;
+  const xaml = FindWindowExW(view, null, wchar('XamlExplorerHostIslandWindow'), null);
+  if (hwndVal(xaml)) return xaml;
+  return view;
+}
+
 export function pinAboveDesktop(win) {
   const h = nativeHwnd(win);
   if (!h) return;
   try {
-    SetWindowPos(h, HWND_BOTTOM, 0, 0, 0, 0, SWP_PIN);
+    const icons = findDesktopIconLayer();
+    SetWindowPos(h, icons || null, 0, 0, 0, 0, SWP_PIN);
   } catch (err) {
     process.stderr.write(`[z] pin failed ${err.message}\n`);
   }
