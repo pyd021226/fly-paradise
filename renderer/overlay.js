@@ -228,6 +228,7 @@ let watch = false;
 let breed = true;
 let showCodons = false;
 let flavorAnnoy = false;
+let stealthUntil = 0;
 let cleared = false;
 let breedMs = 0;
 let holdBoot = true;
@@ -3697,6 +3698,7 @@ function drawCodons() {
 
 function draw(now) {
   ctx.clearRect(0, 0, W, H);
+  if (now < stealthUntil) return;
   if (swatterOn || ragOn || netOn) {
     ctx.fillStyle = 'rgba(0,0,0,0.02)';
     ctx.fillRect(0, 0, W, H);
@@ -4193,6 +4195,7 @@ if (api) {
     if (d.name === 'startFresh') startFresh();
     if (d.name === 'restore' && d.data) applyRestore(d.data);
     if (d.name === 'flush') flushSave();
+    if (d.name === 'stealth') stealthUntil = performance.now() + (Number(d.ms) || 120000);
   });
   api.onRetarget((d) => {
     if (d && d.screens && d.screens.length) screens = d.screens;

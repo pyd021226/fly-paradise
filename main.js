@@ -58,6 +58,9 @@ let iconTimer = null;
 let pinTimer = null;
 let clickTimer = null;
 
+let quitArmed = 0;
+let quitTimer = null;
+
 function virtualBounds() {
   const all = screen.getAllDisplays();
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -855,7 +858,24 @@ if (!app.requestSingleInstanceLock()) {
       } else if (name === 'toTray') {
         hideToTray();
       } else if (name === 'quit') {
-        quitApp();
+        if (!isAnnoy) {
+          quitApp();
+          return;
+        }
+        quitArmed += 1;
+        if (quitArmed === 1) {
+          quitTimer = setTimeout(() => {
+            quitArmed = 0;
+            quitTimer = null;
+            send('cmd', { name: 'stealth', ms: 120000 });
+            hideToTray();
+          }, 500);
+        } else if (quitArmed >= 3) {
+          if (quitTimer) clearTimeout(quitTimer);
+          quitTimer = null;
+          quitArmed = 0;
+          quitApp();
+        }
       }
     });
 
