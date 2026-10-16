@@ -152,13 +152,13 @@
     return pair(d, "A", "a") + pair(p, "B", "b");
   }
   function baseName(d, p) {
-    if ((d || 0) >= 2 && (p || 0) >= 2) return "白";
+    if ((d || 0) >= 2 && (p || 0) >= 2) return "白色";
     if ((d || 0) >= 2) return "深褐";
     if ((p || 0) >= 2) return "中褐";
-    return "褐";
+    return "褐色";
   }
   function traitLine(f) {
-    return bodyTrait(f.gene_d, f.gene_p) + "（" + baseName(f.gene_d, f.gene_p) + "）";
+    return baseName(f.gene_d, f.gene_p) + bodyTrait(f.gene_d, f.gene_p);
   }
   function formatBlood(blood) {
     const parts = [];
