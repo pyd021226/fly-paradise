@@ -630,6 +630,7 @@ async function tryLogin() {
     api.send('logged-in');
   } else {
     $('loginMsg').textContent = (res && res.error) || '登录失败';
+    if (api.reportBug) api.reportBug((res && res.error) || '登录失败', { extra: { where: 'login' } });
   }
 }
 
@@ -647,3 +648,10 @@ api.ready();
     else showLogin();
   });
 })();
+
+addEventListener('error', (e) => {
+  if (api.reportBug) api.reportBug(e.message || 'panel error', { extra: { stack: (e.error && e.error.stack) || '', where: 'panel' } });
+});
+addEventListener('unhandledrejection', (e) => {
+  if (api.reportBug) api.reportBug(String((e.reason && e.reason.message) || e.reason || 'promise'), { extra: { where: 'panel' } });
+});

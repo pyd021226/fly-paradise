@@ -1,0 +1,58 @@
+<title>报错台</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<style>
+  :root { --paper:#f4efe6; --ink:#2a241c; --muted:#7a7166; --line:#ddd4c6; --pink:#e23d7a; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.45 "Segoe UI", "Microsoft YaHei", sans-serif; padding: 20px 16px 64px; }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+  input { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 0 0 12px; font: inherit; }
+  .row { border: 1px solid var(--line); background: #fffdf8; border-radius: 10px; padding: 10px 12px; margin: 0 0 8px; }
+  .meta { color: var(--muted); font-size: 12px; margin: 0 0 4px; }
+  .msg { font-weight: 650; word-break: break-word; }
+  .stack { white-space: pre-wrap; font: 11px Consolas, monospace; color: var(--muted); margin: 6px 0 0; max-height: 120px; overflow: auto; }
+  .err { color: var(--pink); }
+</style>
+<div class="wrap">
+  <h1>报错台</h1>
+  <p class="sub">别人游戏里的失败会自动出现在这里。不要把这个地址发给玩家。</p>
+  <input id="q" type="search" placeholder="搜索 上架 / 游客 / 版本号">
+  <div id="list">加载中…</div>
+</div>
+<script>
+  const URL = "https://asfhegiiqhgaodpmqvlh.supabase.co";
+  const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzZmhlZ2lpcWhnYW9kcG1xdmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNDU0MDAsImV4cCI6MjEwNTcyMTQwMH0._iFe4e77vDLX6vreQE8jci7az8_t1_U1sdnspmiALbQ";
+  let rows = [];
+  function fmt(t) {
+    try { return new Date(t).toLocaleString(); } catch (e) { return t || ""; }
+  }
+  function render() {
+    const q = (document.getElementById("q").value || "").trim().toLowerCase();
+    const box = document.getElementById("list");
+    const show = rows.filter((r) => {
+      if (!q) return true;
+      const blob = [(r.message || ""), (r.email || ""), (r.version || ""), (r.flavor || ""), (r.stack || "")].join(" ").toLowerCase();
+      return blob.indexOf(q) >= 0;
+    });
+    if (!show.length) { box.innerHTML = "<p class='sub'>没有记录</p>"; return; }
+    box.innerHTML = show.map((r) => {
+      const fl = r.flavor === "annoy" ? "造福" : (r.flavor === "breed" ? "繁育" : (r.flavor || ""));
+      return "<div class='row'><div class='meta'>" + fmt(r.created_at) + " · " + (r.version || "?") + " · " + fl + " · " + (r.email || "无号") + "</div><div class='msg'>" + String(r.message || "").replace(/[<>]/g, "") + "</div>" + (r.stack ? "<div class='stack'>" + String(r.stack).replace(/[<>]/g, "") + "</div>" : "") + "</div>";
+    }).join("");
+  }
+  document.getElementById("q").addEventListener("input", render);
+  fetch(URL + "/rest/v1/bug_reports?select=created_at,version,flavor,email,message,stack&order=created_at.desc&limit=200", {
+    headers: { apikey: ANON, Authorization: "Bearer " + ANON },
+  }).then((r) => r.json()).then((data) => {
+    if (!Array.isArray(data)) {
+      document.getElementById("list").innerHTML = "<p class='err'>读不到表。先在 Supabase 跑 server/bug_reports.sql</p>";
+      return;
+    }
+    rows = data;
+    render();
+  }).catch((e) => {
+    document.getElementById("list").innerHTML = "<p class='err'>" + e.message + "</p>";
+  });
+</script>

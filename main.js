@@ -865,6 +865,13 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('fly-get-points', async () => flyApi.getPoints());
     ipcMain.handle('fly-shop-session', () => flyApi.getShopSession());
     ipcMain.handle('fly-buy-listing', async (_e, arg) => flyApi.buyListing(arg.id));
+    ipcMain.handle('fly-report-bug', async (_e, arg) => flyApi.reportBug(arg && arg.message, {
+      version: app.getVersion(),
+      flavor: isAnnoy ? 'annoy' : 'breed',
+      extra: arg && arg.extra,
+      stack: arg && arg.extra && arg.extra.stack,
+      email: arg && arg.extra && arg.extra.email,
+    }));
     ipcMain.handle('fly-simulate-clutch', async (_e, arg) => {
       try {
         const a = parentFromSim(arg && arg.a, 'a');

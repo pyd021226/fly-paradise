@@ -2110,6 +2110,9 @@ async function unlistToJar(id) {
 function publishJar() {
   if (!window.fly || !window.fly.sendBottle) return;
   window.fly.sendBottle({ hint: jarHint, count: jar.length });
+  if (jarHint && /失败|超时|编号/.test(jarHint) && window.fly.reportBug) {
+    window.fly.reportBug(jarHint, { extra: { where: 'jar' } });
+  }
 }
 
 function pruneJarSel() {
@@ -4196,3 +4199,14 @@ if (api) {
     resize();
   });
 }
+
+addEventListener('error', (e) => {
+  if (window.fly && window.fly.reportBug) {
+    window.fly.reportBug(e.message || 'overlay error', { extra: { stack: (e.error && e.error.stack) || '' } });
+  }
+});
+addEventListener('unhandledrejection', (e) => {
+  if (window.fly && window.fly.reportBug) {
+    window.fly.reportBug(String((e.reason && e.reason.message) || e.reason || 'promise'), {});
+  }
+});

@@ -482,3 +482,39 @@ export async function buyListing(id) {
   if (!res.ok) return { ok: false, error: data.message || data.error || '购买失败' };
   return { ok: true, data };
 }
+
+let lastBug = '';
+let lastBugAt = 0;
+let bugCount = 0;
+
+export async function reportBug(message, extra) {
+  const msg = String(message || '').trim().slice(0, 500);
+  if (!msg) return { ok: false };
+  const now = Date.now();
+  if (msg === lastBug && now - lastBugAt < 20000) return { ok: true };
+  if (bugCount >= 40) return { ok: false };
+  lastBug = msg;
+  lastBugAt = now;
+  bugCount += 1;
+  const x = extra || {};
+  try {
+    await fetchTimeout(`${URL}/rest/v1/bug_reports`, {
+      method: 'POST',
+      headers: {
+        apikey: ANON,
+        Authorization: `Bearer ${ANON}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        version: String(x.version || ''),
+        flavor: String(x.flavor || ''),
+        email: String(x.email || sessionEmail || '').split('@')[0],
+        message: msg,
+        stack: x.stack ? String(x.stack).slice(0, 2500) : '',
+        extra: x.extra && typeof x.extra === 'object' ? x.extra : {},
+      }),
+    });
+  } catch { /* 上报失败就吞掉 */ }
+  return { ok: true };
+}
