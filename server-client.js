@@ -264,6 +264,7 @@ export async function createListing(kind, flyIds, note, want, instar, color) {
       headers: authHeaders(),
     });
     const rows = await open.json().catch(() => []);
+    if ((rows || []).length >= 3) return { ok: false, error: '最多上架 3 件' };
     const taken = new Set();
     for (const row of rows || []) {
       if (row.fly_id) taken.add(row.fly_id);
