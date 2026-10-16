@@ -444,8 +444,14 @@ if (jarCv) {
 if ($('openShop')) $('openShop').onclick = () => { if (!isAnnoy) api.send('openShop'); };
 if ($('jarAll')) $('jarAll').onclick = () => api.send('jarSelectAll');
 if ($('jarFree')) $('jarFree').onclick = () => api.send('jarFreeSel');
+let listedCount = 0;
+
 if ($('jarSell')) $('jarSell').onclick = () => {
   if (isAnnoy) return;
+  if (listedCount >= 3) {
+    shopTip('最多上架 3 件');
+    return;
+  }
   const note = ($('sellNote') && $('sellNote').value.trim()) || '';
   if (!note) {
     shopTip('请先备注再上架');
@@ -564,6 +570,16 @@ function openCapture() {
 async function loadShop() {
   if (isAnnoy) return;
   loadPoints();
+  if (!api.listListings) return;
+  try {
+    const res = await api.listListings();
+    const rows = (res && res.ok && res.data && res.data.listings) || [];
+    listedCount = rows.filter((l) => l.mine).length;
+  } catch {
+    listedCount = 0;
+  }
+  const el = $('listCap');
+  if (el) el.textContent = '已上架 ' + listedCount + '/3';
 }
 
 if (!shopPoll) shopPoll = setInterval(() => {
