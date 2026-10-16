@@ -80,6 +80,23 @@
   let token = "", refreshTok = "", email = "", uid = "", tipTimer = 0;
   let listings = [], allOffers = [], cat = "all", q = "";
 
+  function reportShop(msg) {
+    try {
+      fetch(URL + "/rest/v1/bug_reports", {
+        method: "POST",
+        headers: { apikey: ANON, Authorization: "Bearer " + ANON, "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify({
+          version: "",
+          flavor: "shop",
+          email: (email || "").split("@")[0],
+          message: String(msg || "").slice(0, 500),
+          stack: "",
+          extra: { where: "shop" },
+        }),
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
   function tip(t) {
     const el = document.getElementById("tip");
     el.textContent = t || "";
@@ -189,7 +206,11 @@
       }
       got = await doFetch(path, opts);
     }
-    if (!got.r.ok) throw new Error(got.body.message || got.body.error || got.body.error_description || ("HTTP " + got.r.status));
+    if (!got.r.ok) {
+      const msg = got.body.message || got.body.error || got.body.error_description || got.body.details || ("HTTP " + got.r.status);
+      reportShop("商店 " + msg);
+      throw new Error(msg);
+    }
     return got.body;
   }
   function kindLabel(k) { return kindName[k] || k || ""; }

@@ -511,8 +511,16 @@ function enterGuest() {
     api.ensureGuest().then((g) => {
       if (g && g.ok && g.email && $('whoami')) {
         $('whoami').textContent = '游客 · ' + g.email;
+      } else {
+        const err = (g && g.error) || '游客进入失败';
+        if ($('whoami')) $('whoami').textContent = '游客（没连上服务器）';
+        if (api.reportBug) api.reportBug(err, { extra: { where: 'guest' } });
       }
-    }).catch(() => {});
+    }).catch((e) => {
+      const err = (e && e.message) || '游客进入失败';
+      if ($('whoami')) $('whoami').textContent = '游客（没连上服务器）';
+      if (api.reportBug) api.reportBug(err, { extra: { where: 'guest' } });
+    });
   }
   loadShop();
   loadLeaderboard();
