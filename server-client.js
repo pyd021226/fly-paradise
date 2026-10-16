@@ -274,7 +274,7 @@ export async function createListing(kind, flyIds, note, want, instar, color) {
     if (ids.some((id) => taken.has(id))) return { ok: false, error: '已经上架过了' };
     res = await fetchTimeout(`${URL}/rest/v1/listings`, {
       method: 'POST',
-      headers: authHeaders({ Prefer: 'return=minimal' }),
+      headers: authHeaders({ Prefer: 'return=representation' }),
       body: JSON.stringify({
         seller_id: me.id,
         seller_email: me.email,
@@ -296,7 +296,10 @@ export async function createListing(kind, flyIds, note, want, instar, color) {
     const err = await res.json().catch(() => ({}));
     return { ok: false, error: err.message || err.error || '上架失败' };
   }
-  return { ok: true, data: { ok: true } };
+  const created = await res.json().catch(() => []);
+  const row = Array.isArray(created) ? created[0] : created;
+  if (!row || !row.id) return { ok: false, error: '上架了但商店读不到，需要补读取权限' };
+  return { ok: true, data: { ok: true, id: row.id } };
 }
 
 export async function listListings() {
