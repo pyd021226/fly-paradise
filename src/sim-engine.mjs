@@ -16,9 +16,12 @@ export function inheritGene(a, b) {
   return passRecessive(a) + passRecessive(b);
 }
 
-/** A/B 两套基因都至少留一份杂合，褐永远是 AaBb，开局不会死局。 */
+/** 允许 0/1/2，不再强制杂合，否则 AA 会把 a 吃光。 */
 export function clampCarrier(geneD, geneP) {
-  return { geneD: Math.max(1, geneD), geneP: Math.max(1, geneP) };
+  return {
+    geneD: Math.max(0, Math.min(2, geneD)),
+    geneP: Math.max(0, Math.min(2, geneP)),
+  };
 }
 
 export function formatGeno(geneD, geneP) {
