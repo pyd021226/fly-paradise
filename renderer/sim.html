@@ -27,6 +27,13 @@
     .wrap { max-width: 980px; margin: 0 auto; }
     h1 { font-size: 20px; margin: 0 0 4px; }
     .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+    .sub .xw {
+      color: #c0392b;
+      text-decoration: underline;
+      font-weight: 700;
+      font-family: Consolas, "IBM Plex Mono", monospace;
+    }
+    .sub .geno { font-family: Consolas, "IBM Plex Mono", monospace; font-weight: 650; color: var(--ink); }
     .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; align-items: center; }
     button {
       font: inherit;
@@ -86,7 +93,7 @@
 <body>
 <div class="wrap">
   <h1>配种推演</h1>
-  <p class="sub">测试期全露出。开局一公一母，基因码 <b>1</b>。只能异性配。一窝 3 枚：前两枚末位跟父母体色（褐1 中褐2 深褐3 白4），第三枚随机跟父或母体色。前置位锁死。血账、借脸、充能都写在日志里。这是本机新规则；登录后桌面上真下崽仍走旧云函数，对不上是已知的。</p>
+  <p class="sub">底色：褐色 <span class="geno">a<span class="xw">x</span>b<span class="xw">x</span></span>　中褐 <span class="geno"><span class="xw">xx</span>BB</span>　深褐 <span class="geno">AA<span class="xw">xx</span></span>　白 <span class="geno">AABB</span>。<span class="xw">x</span> 是任意等位。<br>九种写法：aabb、aaBb、aaBB、Aabb、AaBb、AaBB、AAbb、AABb、AABB。<br>开局一公一母密码 1、AaBb。只能异性配。一窝 3 枚。登录桌面真下崽仍是旧云函数。</p>
   <div class="row">
     <button type="button" id="breed" disabled>这两只下崽</button>
     <button class="ghost" type="button" id="rand">随机两只下崽</button>
