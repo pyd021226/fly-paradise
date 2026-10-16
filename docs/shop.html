@@ -309,8 +309,15 @@
       u.className = "off"; u.textContent = "下架";
       u.onclick = async () => {
         try {
-          await req("/rest/v1/listings?id=eq." + l.id, { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify({ status: "closed" }) });
-          tip("已下架"); await refresh();
+          if (window.shopBridge && window.shopBridge.unlist) {
+            const r = await window.shopBridge.unlist(l.id);
+            if (!r || !r.ok) throw new Error((r && r.error) || "下架失败");
+            tip("已下架，货进瓶子");
+          } else {
+            await req("/rest/v1/listings?id=eq." + l.id, { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify({ status: "closed" }) });
+            tip("已下架");
+          }
+          await refresh();
         } catch (e) { tip("下架失败：" + e.message); }
       };
       row.appendChild(u);

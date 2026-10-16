@@ -893,6 +893,21 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('fly-create-listing', async (_e, arg) => flyApi.createListing(arg.kind, arg.flyIds, arg.note, arg.want, arg.instar, arg.color));
     ipcMain.handle('fly-list-listings', async () => flyApi.listListings());
     ipcMain.handle('fly-unlist-listing', async (_e, arg) => flyApi.unlistListing(arg.id));
+    ipcMain.handle('fly-shop-unlist', async (_e, arg) => {
+      const res = await flyApi.unlistListing(arg && arg.id);
+      if (res && res.ok) {
+        const items = (res.data && res.data.items) || [];
+        captureOpen = true;
+        send('cmd', { name: 'capture', value: true });
+        sendBottleRect();
+        send('cmd', { name: 'jarRestock', items });
+        if (panel && !panel.isDestroyed()) {
+          panel.show();
+          panel.webContents.send('open-capture');
+        }
+      }
+      return res;
+    });
     ipcMain.handle('fly-create-offer', async (_e, arg) => flyApi.createOffer(arg.listingId, arg.kind, arg.flyIds, arg.note, arg.color, arg.instar));
     ipcMain.handle('fly-list-offers', async () => flyApi.listOffers());
     ipcMain.handle('fly-accept-offer', async (_e, arg) => flyApi.acceptOffer(arg.id));

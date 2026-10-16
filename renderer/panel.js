@@ -143,6 +143,12 @@ $('capture').onclick = () => {
   api.send('capture', { open: captureOpen });
 };
 paintCapture();
+if (api.onOpenCapture) {
+  api.onOpenCapture(() => {
+    captureOpen = true;
+    paintCapture();
+  });
+}
 $('xray').onclick = () => api.send('xray');
 $('autoStart').onchange = () => api.send('autostart');
 $('resume').onclick = () => api.send('resume');

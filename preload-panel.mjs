@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('panel', {
   onState: (cb) => ipcRenderer.on('state', (_e, d) => cb(d)),
   onLife: (cb) => ipcRenderer.on('life-stats', (_e, d) => cb(d)),
   onBottle: (cb) => ipcRenderer.on('bottle', (_e, d) => cb(d)),
+  onOpenCapture: (cb) => ipcRenderer.on('open-capture', () => cb()),
   ready: () => ipcRenderer.send('panel-ready'),
   signIn: (email, password) => ipcRenderer.invoke('fly-signin', { email, password }),
   signOut: () => ipcRenderer.invoke('fly-signout'),

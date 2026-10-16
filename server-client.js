@@ -331,12 +331,7 @@ export async function unlistListing(id) {
   try {
     res = await fetchTimeout(`${URL}/rest/v1/listings?id=eq.${encodeURIComponent(id)}`, {
       method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        apikey: ANON,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
-      },
+      headers: authHeaders({ Prefer: 'return=representation' }),
       body: JSON.stringify({ status: 'closed' }),
     });
   } catch (e) {
