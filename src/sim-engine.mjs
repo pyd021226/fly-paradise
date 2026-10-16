@@ -75,23 +75,34 @@ export function baseDigitOf(geneD, geneP) {
 
 export function familyOf(codon) {
   if (!codon || codon.length < 4) return null;
-  const prefix = codon.slice(0, 4);
-  return FAMILIES[prefix] ? prefix : null;
+  for (let i = 0; i <= codon.length - 4; i++) {
+    const frag = codon.slice(i, i + 4);
+    if (FAMILIES[frag]) return frag;
+  }
+  return null;
 }
 
 export function mutationLook(codon) {
   if (!codon || codon.length < 4) return null;
-  const prefix = codon.slice(0, 4);
-  const color = FAMILIES[prefix];
-  if (!color) return null;
-  const d4 = prefix[3];
-  if (codon.length === 4) return { color, bright: false };
-  if (codon.length === 5) {
-    if (codon[4] !== d4) return null;
-    return { color, bright: false };
+  let hit = null;
+  let idx = -1;
+  for (let i = 0; i <= codon.length - 4; i++) {
+    const frag = codon.slice(i, i + 4);
+    if (FAMILIES[frag]) { hit = frag; idx = i; break; }
   }
-  // 第 7 位起暂不解释：亮一档只看第 6 位。
-  return { color, bright: codon[5] === d4 };
+  if (!hit) return null;
+  const color = FAMILIES[hit];
+  const d4 = hit[3];
+  const after = codon.slice(idx + 4);
+  if (!after.length) return { color, bright: false };
+  if (after[0] !== d4) return null;
+  if (after.length === 1) return { color, bright: false };
+  return { color, bright: after[1] === d4 };
+}
+
+export function appendCodon(base, digit) {
+  const next = String(base || "") + String(digit || "");
+  return next.length > 9 ? next.slice(next.length - 9) : next;
 }
 
 export function mutationOf(codon) {
@@ -331,7 +342,7 @@ export function simulateEgg(a, b, appendFromId) {
     const src = digitSrc === "a" ? a : b;
     digit = baseDigitOf(src.gene_d, src.gene_p);
   }
-  const codonBeforeMut = (follow.codon || "") + digit;
+  const codonBeforeMut = appendCodon(follow.codon || "", digit);
   const codon = mutateCodon(codonBeforeMut);
   const bloodIn = asBlood(follow.blood);
   const bloodTick = tickBlood(bloodIn, follow.codon || "", other.codon || "");
