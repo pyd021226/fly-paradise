@@ -184,10 +184,11 @@ if (api.onLife) {
     const el = $('stats');
     if (!el) return;
     let line = `成虫 ${last.adults || 0}（${sexn(last.adultF, last.adultM)}）　卵 ${last.eggs || 0}　蛆 ${last.l1 || 0}/${last.l2 || 0}/${last.l3 || 0}　蛹 ${last.pupae || 0}`;
-    line += `<span class="m">褐色AaBb （1） ${sexn(last.wildF, last.wildM)}</span>`;
-    line += `<span class="m">中褐AaBB （2） ${sexn(last.midF, last.midM)}</span>`;
-    line += `<span class="m">深褐AABb （3） ${sexn(last.deepF, last.deepM)}</span>`;
-    line += `<span class="m">白色AABB （4） ${sexn(last.whiteF, last.whiteM)}</span>`;
+    const xw = '<span class="xw">x</span>';
+    line += `<span class="m">褐色 a${xw}b${xw} （1） ${sexn(last.wildF, last.wildM)}</span>`;
+    line += `<span class="m">中褐 ${xw}${xw}BB （2） ${sexn(last.midF, last.midM)}</span>`;
+    line += `<span class="m">深褐 AA${xw}${xw} （3） ${sexn(last.deepF, last.deepM)}</span>`;
+    line += `<span class="m">白色 AABB （4） ${sexn(last.whiteF, last.whiteM)}</span>`;
     if (last.green) line += `<span class="m">绿色1124 ${sexn(last.greenF, last.greenM)}</span>`;
     if (last.green2) line += `<span class="m">亮绿1124 ${sexn(last.green2F, last.green2M)}</span>`;
     if (last.red) line += `<span class="m">红色1123 ${sexn(last.redF, last.redM)}</span>`;

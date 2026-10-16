@@ -12,9 +12,9 @@ import { fetchIconRects } from './src/icon-rects.js';
 import { startRawMouse, stopRawMouse } from './src/raw-mouse.js';
 import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs } from './src/desktop-layer.js';
 import * as flyApi from './server-client.js';
+import { createRequire } from 'node:module';
 import { asBlood, simulateClutch, whiteChance } from './src/sim-engine.mjs';
-import updater from 'electron-updater';
-const { autoUpdater } = updater;
+const { autoUpdater } = createRequire(import.meta.url)('electron-updater');
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(HERE, 'assets', 'tray.png');

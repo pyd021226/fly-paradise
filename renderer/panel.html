@@ -92,6 +92,12 @@
       color: var(--ink);
     }
     .stats .m { display: block; }
+    .stats .xw {
+      color: #c0392b;
+      text-decoration: underline;
+      font-weight: 700;
+      font-family: Consolas, "IBM Plex Mono", monospace;
+    }
     .add-row {
       display: grid;
       grid-template-columns: 1fr auto auto;
@@ -238,7 +244,7 @@
     <h1>果蝇乐园</h1>
     <div class="stats" id="leaderboard">排行榜加载中…</div>
     <p class="hint" id="hint">苍蝇在桌面上。点下面拿拍去打，Esc 收起。</p>
-    <div class="stats" id="stats">成虫 0　卵 0　蛆 0/0/0　蛹 0<br><span class="m">褐色AaBb （1） 0</span><span class="m">中褐AaBB （2） 0</span><span class="m">深褐AABb （3） 0</span><span class="m">白色AABB （4） 0</span></div>
+    <div class="stats" id="stats">成虫 0　卵 0　蛆 0/0/0　蛹 0<br><span class="m">褐色 a<span class="xw">x</span>b<span class="xw">x</span> （1） 0</span><span class="m">中褐 <span class="xw">xx</span>BB （2） 0</span><span class="m">深褐 AA<span class="xw">xx</span> （3） 0</span><span class="m">白色 AABB （4） 0</span></div>
     <div class="stats" id="points">积分 0</div>
     <p class="note">打死一只 +1 积分</p>
     <button id="openSim" type="button">配种推演</button>
