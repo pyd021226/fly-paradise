@@ -13,6 +13,7 @@ import { startRawMouse, stopRawMouse } from './src/raw-mouse.js';
 import { pinAboveDesktop, cursorOnDesktop, leftButtonDown, recycleBinHasItems, isRecycleBinName, doubleClickMs } from './src/desktop-layer.js';
 import * as flyApi from './server-client.js';
 import { asBlood, simulateClutch, whiteChance } from './src/sim-engine.mjs';
+import { autoUpdater } from 'electron-updater';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(HERE, 'assets', 'tray.png');
@@ -115,6 +116,18 @@ function startedFromLogin() {
     if (app.getLoginItemSettings().wasOpenedAtLogin) return true;
   } catch { /* */ }
   return false;
+}
+
+function setupUpdater() {
+  if (!app.isPackaged) return;
+  try {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.channel = isAnnoy ? 'welfare' : 'latest';
+    setTimeout(() => {
+      autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+    }, 12000);
+  } catch { /* 无网或未发过 Release 就跳过 */ }
 }
 
 function loadSettings() {
@@ -705,6 +718,7 @@ if (!app.requestSingleInstanceLock()) {
     }
     panel.on('move', sendBottleRect);
     panel.on('resize', sendBottleRect);
+    setupUpdater();
 
     setTimeout(() => {
       if (!overlay || overlay.isDestroyed()) return;
