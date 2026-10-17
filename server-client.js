@@ -277,6 +277,7 @@ export async function createListing(kind, flyIds, note, want, instar, color, gen
   const price = Math.floor(Number(want));
   if (!(price >= 1)) return { ok: false, error: '上架前要设置积分' };
   let res;
+  let payload;
   try {
     const open = await fetchTimeout(`${URL}/rest/v1/listings?status=eq.open&seller_id=eq.${me.id}&select=fly_id,fly_ids`, {
       headers: authHeaders(),
@@ -290,7 +291,7 @@ export async function createListing(kind, flyIds, note, want, instar, color, gen
     }
     if (ids.some((id) => taken.has(id))) return { ok: false, error: '已经上架过了' };
     const g = genes || {};
-    const payload = {
+    payload = {
       seller_id: me.id,
       seller_email: me.email,
       kind,
@@ -325,12 +326,37 @@ export async function createListing(kind, flyIds, note, want, instar, color, gen
           headers: authHeaders({ Prefer: 'return=representation' }),
           body: JSON.stringify(payload),
         });
+      } else if (/row-level security/i.test(msg)) {
+        payload.seller_id = me.id;
+        const g2 = await ensureGuest();
+        if (g2 && g2.ok) {
+          const me2 = tokenUser();
+          if (me2) payload.seller_id = me2.id;
+          res = await fetchTimeout(`${URL}/rest/v1/listings`, {
+            method: 'POST',
+            headers: authHeaders({ Prefer: 'return=representation' }),
+            body: JSON.stringify(payload),
+          });
+        } else {
+          return { ok: false, error: msg || '上架失败' };
+        }
       } else {
         return { ok: false, error: msg || '上架失败' };
       }
     }
   } catch (e) {
-    return { ok: false, error: e.timeout ? '请求超时' : (e.message || '上架失败') };
+    if (!payload) {
+      return { ok: false, error: e.timeout ? '请求超时' : (e.message || '上架失败') };
+    }
+    try {
+      res = await fetchTimeout(`${URL}/rest/v1/listings`, {
+        method: 'POST',
+        headers: authHeaders({ Prefer: 'return=representation' }),
+        body: JSON.stringify(payload),
+      });
+    } catch (e2) {
+      return { ok: false, error: e2.timeout ? '请求超时' : (e2.message || '上架失败') };
+    }
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

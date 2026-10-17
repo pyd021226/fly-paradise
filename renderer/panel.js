@@ -617,7 +617,10 @@ async function tryLogin() {
     api.send('logged-in');
   } else {
     $('loginMsg').textContent = (res && res.error) || '登录失败';
-    if (api.reportBug) api.reportBug((res && res.error) || '登录失败', { extra: { where: 'login' } });
+    const err = (res && res.error) || '登录失败';
+    if (api.reportBug && !/invalid login credentials/i.test(err)) {
+      api.reportBug(err, { extra: { where: 'login' } });
+    }
   }
 }
 

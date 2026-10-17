@@ -2129,7 +2129,9 @@ function publishJar() {
   if (!window.fly || !window.fly.sendBottle) return;
   window.fly.sendBottle({ hint: jarHint, count: jar.length });
   if (jarHint && /失败|超时|编号/.test(jarHint) && window.fly.reportBug) {
-    window.fly.reportBug(jarHint, { extra: { where: 'jar' } });
+    if (!/fetch failed|请求超时|超时/.test(jarHint)) {
+      window.fly.reportBug(jarHint, { extra: { where: 'jar' } });
+    }
   }
 }
 
