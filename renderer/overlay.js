@@ -1,8 +1,117 @@
 import { colorFromCodon } from '../src/codon-color.mjs';
 import { simulateClutch } from '../src/sim-engine.mjs';
+import { createEncounterTracker, createResilientObserver } from '../src/encounter-tracker.mjs';
+import { CABINET_REQUESTS } from '../src/cabinet-contract.mjs';
 
+// 遇见索引上报：成虫只要实际出现过就记一次体色，不做去重以外的加工。
+// 快照推迟到本轮同步代码之后绘制，避免打断生成、羽化、购买和存档恢复。
+function flySnapshot(unit) {
+  const size = 128;
+  const off = document.createElement('canvas');
+  off.width = size;
+  off.height = size;
+  const g = off.getContext('2d');
+  g.fillStyle = '#fdfcf7';
+  g.fillRect(0, 0, size, size);
+  // drawFly 画的是模块级 ctx（桌面画布），并且会改写全局 COL 调色板。
+  // 快照期间两者都临时改道，结束后一律还原，不能污染桌面渲染。
+  const desktop = ctx;
+  const savedCol = { ...COL };
+  try {
+   ctx = g;
+   g.save();
+   g.translate(size / 2, size / 2);
+   const k = (unit && unit.scale ? unit.scale : 1) * 6;
+   g.scale(k, k);
+   drawFly({
+    x: 0,
+    y: 0,
+    seed: (unit && unit.seed) || 1,
+    sex: (unit && unit.sex) || 'f',
+    scale: 1,
+    color: (unit && unit.color) || 'wild',
+    codon: (unit && unit.codon) || '',
+    serverId: (unit && unit.serverId) || null,
+    heading: -Math.PI / 2,
+    visHead: -Math.PI / 2,
+    state: 'fly',
+    crawling: false,
+    mateRole: 0,
+   }, performance.now());
+  } finally {
+   try { g.restore(); } catch { /* 画布状态已回滚 */ }
+   Object.assign(COL, savedCol);
+   ctx = desktop;
+  }
+  return off.toDataURL('image/png');
+}
+
+const encounterTracker = createEncounterTracker({
+  describe: (unit, source) => {
+    let image = null;
+    try { image = flySnapshot(unit); } catch { image = null; }
+    return {
+      color: unit.color || 'wild',
+      source,
+      codon: typeof unit.codon === 'string' ? unit.codon : '',
+      sex: unit.sex === 'm' || unit.sex === 'f' ? unit.sex : null,
+      ...genotypeOf(unit),
+      image,
+    };
+  },
+  persist: (item) => new Promise((resolve, reject) => {
+    if (!window.fly || !window.fly.sendEncounter) {
+      reject(Error('遇见索引通道不可用'));
+      return;
+    }
+    window.fly.sendEncounter(item, (reply) => {
+      if (reply && reply.ok) resolve(reply);
+      else reject(Error((reply && reply.error) || '遇见记录保存失败'));
+    });
+  }),
+});
+
+// 基因资料真值判定：只有服务器返回的 geno、或本机遗传引擎在产卵时写下的
+// 等位基因（genoSource 标记）才算已核实；spawnFly 的默认值与空 geno 一律未知，
+// 绝不按体色反推基因型。
+function genotypeOf(unit) {
+  if (!unit) return { geno: null, geneD: null, geneP: null, genoVerified: false };
+  // 只要带着真实等位基因数（0~2）就直接算显隐性，不再卡「基因来源标记」。
+  const geneD = unit.gene_d;
+  const geneP = unit.gene_p;
+  if (Number.isInteger(geneD) && Number.isInteger(geneP) && geneD >= 0 && geneD <= 2 && geneP >= 0 && geneP <= 2) {
+    return { geno: null, geneD, geneP, genoVerified: true };
+  }
+  // 没有等位基因数时，退回服务器返回的显隐性字符串。
+  const geno = typeof unit.geno === 'string' && unit.geno.length > 0 ? unit.geno : null;
+  if (geno) return { geno, geneD: null, geneP: null, genoVerified: true };
+  return { geno: null, geneD: null, geneP: null, genoVerified: false };
+}
+
+// 事件循环结束后再上报，确保同一同步块里的状态改动都已生效；
+// 通道未就绪或写盘失败时由观察器排队重试。
+const encounterObserver = createResilientObserver(
+  (fly, source) => encounterTracker.observe(fly, source),
+  { onError: (error) => console.warn('遇见索引上报重试中', error && error.message) },
+);
+function delayEncounter(fly, source) {
+  setTimeout(() => { encounterObserver.report(fly, source); }, 0);
+}
+
+// 启动闸门：通道就绪前先不上报，避免 preload 尚未挂载时丢事件。
+let encounterChannelReady = false;
+
+// 启动时先取回本机已经记录过的体色，避免重复上报已存在的颜色。
+async function hydrateEncounters() {
+  if (!window.fly || !window.fly.seenEncounterColors) return;
+  try {
+    const colors = await window.fly.seenEncounterColors();
+    if (Array.isArray(colors)) encounterTracker.hydrate(colors);
+    encounterChannelReady = true;
+  } catch { /* 通道尚未就绪，后续出现事件仍会正常记录 */ }
+}
 const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+let ctx = canvas.getContext('2d');
 
 const FLY_HIT = 11;
 const MAX_ADULTS = 48;
@@ -253,6 +362,288 @@ let lifeAcc = 0;
 let snapAcc = 0;
 let last = performance.now();
 let screens = [];
+
+// 只读暴露给设置界面（遇见索引设置项）。
+Object.defineProperty(window, '__flyCaptureOpen', { get: () => captureOpen, configurable: true });
+
+
+// ================= 名蛆堂：个体身份 / 事务冻结 / 活跃时长 =================
+// 声明必须在任何使用之前（否则会 TDZ 崩溃）。
+let saveRunId = newId();
+let cabinetActiveMs = 0;
+let cabinetTransaction = null;
+let cabinetRestockQueue = [];
+let cabinetConsumed = new Set();
+let cabinetJarConsumed = new Map();
+
+function newId() {
+  return (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : ('id-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36));
+}
+
+function ensureUnitIdentity(unit, runId) {
+  if (!unit) return unit;
+  if (typeof unit.runId !== 'string' || !unit.runId) unit.runId = runId || saveRunId || newId();
+  if (typeof unit.originId !== 'string' || !unit.originId) unit.originId = unit.runId + ':' + newId();
+  return unit;
+}
+
+// 亲本档案只能用真实可信的基因资料：标了 server/local 但资料缺失时，
+// 按 genotypeOf 的同一口径判为未核实，绝不显示编造出的默认基因型。
+function cabinetParent(unit) {
+  if (!unit) return null;
+  const genes = genotypeOf(unit);
+  return {
+    sex: ['m', 'f'].includes(unit.sex) ? unit.sex : null,
+    color: unit.color || null,
+    codon: typeof unit.codon === 'string' && unit.codon.length ? unit.codon : null,
+    ...genes,
+  };
+}
+
+function parentsAtLay(mom, dad, clone) {
+  const parents = {
+    mode: clone ? 'clone' : 'pair',
+    mother: cabinetParent([mom, dad].find((f) => f && f.sex === 'f') || mom || null),
+    father: clone ? null : cabinetParent([mom, dad].find((f) => f && f.sex === 'm') || dad || null),
+  };
+  return parents.mother || parents.father ? parents : null;
+}
+
+function cabinetResearch(unit) {
+  return {
+    runId: unit && typeof unit.runId === 'string' ? unit.runId : null,
+    originId: unit && typeof unit.originId === 'string' ? unit.originId : null,
+    parents: unit && unit.parents ? structuredClone(unit.parents) : null,
+    lifeStartedActiveMs: unit && Number.isFinite(unit.lifeStartedActiveMs) && unit.lifeStartedActiveMs >= 0
+      ? unit.lifeStartedActiveMs : null,
+  };
+}
+
+function cabinetLifespan(unit) {
+  if (!unit || !Number.isFinite(unit.lifeStartedActiveMs) || unit.lifeStartedActiveMs < 0) return null;
+  if (unit.lifeStartedActiveMs > cabinetActiveMs) return null;
+  return Math.round(cabinetActiveMs - unit.lifeStartedActiveMs);
+}
+
+function cabinetState() {
+  for (const f of flies) ensureUnitIdentity(f, saveRunId);
+  for (const u of jar) ensureUnitIdentity(u, saveRunId);
+  return {runId: saveRunId, flies, jar};
+}
+
+function findCabinetJarAdult(originId, captureId) {
+  return jar.find((u) => u.kind === 'fly' && !u.dead && u.originId === originId && u.captureId === captureId) || null;
+}
+
+function cabinetRemove(originId, captureId) {
+  const before = jar.length;
+  const kept = jar.filter((u) => !(u.originId === originId && u.captureId === captureId));
+  if (kept.length === before) return false;
+  for (const gone of jar) {
+    if (gone.originId === originId && gone.captureId === captureId) jarSel.delete(gone.id);
+  }
+  jar = kept;
+  return true;
+}
+
+function cabinetReconcile() {
+  let changed = false;
+  for (const originId of cabinetConsumed) {
+    const captureId = cabinetJarConsumed.get(originId) || null;
+    if (captureId && cabinetRemove(originId, captureId)) changed = true;
+  }
+  if (changed) {
+    jarHint = '';
+    publishJar();
+  }
+}
+
+// 与 cabinetImage 一致的大图快照：临时改道 ctx 并还原全局调色板。
+function cabinetImage(unit) {
+  const output = document.createElement('canvas');
+  output.width = 256;
+  output.height = 256;
+  const previous = ctx;
+  const colors = {...COL};
+  try {
+    ctx = output.getContext('2d');
+    ctx.fillStyle = '#fdfcf7';
+    ctx.fillRect(0, 0, 768, 768);
+    ctx.translate(128, 103);
+    ctx.scale(12.67 * (unit.scale || 1), 12.67 * (unit.scale || 1));
+    applyBody(unit, unit.sex === 'm', false, 0);
+    drawSide(0, unit.seed || 0, false);
+    return output.toDataURL('image/png');
+  } finally {
+    ctx = previous;
+    Object.assign(COL, colors);
+  }
+}
+
+// 展柜候选：本地标本沿用原资格；服务器个体必须有真实捕网来源，只允许快照保留活体。
+function cabinetBottleAdults() {
+  if (listingBusy) return [];
+  cabinetState();
+  return jar.filter((u) => u.kind === 'fly' && !u.dead && u.state !== 'dead'
+    && typeof u.captureId === 'string' && u.captureId.length > 0
+    && (!(typeof u.serverId === 'string' && u.serverId.length > 0) || u.capturedByNet === true)
+    && !cabinetConsumed.has(u.originId));
+}
+
+function cabinetDescribe(unit) {
+  const genes = genotypeOf(unit);
+  return {
+    runId: saveRunId,
+    originId: unit.originId,
+    captureId: unit.captureId,
+    capturedByNet: unit.capturedByNet === true,
+    originalId: unit.id,
+    sex: unit.sex === 'm' ? 'm' : 'f',
+    color: unit.color || 'wild',
+    source: 'manual',
+    kind: 'fly',
+    dead: unit.dead === true || unit.state === 'dead',
+    serverId: typeof unit.serverId === 'string' && unit.serverId.length ? unit.serverId : null,
+    location: 'jar',
+    codon: typeof unit.codon === 'string' && unit.codon.length ? unit.codon : null,
+    geno: genes.geno,
+    gene_d: genes.geneD,
+    gene_p: genes.geneP,
+    genoVerified: genes.genoVerified,
+    seed: Number.isFinite(unit.seed) ? unit.seed : 0,
+    scale: Number.isFinite(unit.scale) && unit.scale > 0 ? unit.scale : 1,
+    appearance: {seed: Number.isFinite(unit.seed) ? unit.seed : 0, scale: Number.isFinite(unit.scale) && unit.scale > 0 ? unit.scale : 1},
+    parents: unit.parents ? structuredClone(unit.parents) : null,
+    liveMs: Number.isFinite(unit.liveMs) && unit.liveMs >= 0 ? unit.liveMs : null,
+    mates: Number.isInteger(unit.mates) && unit.mates >= 0 ? unit.mates : null,
+  };
+}
+
+function bottleEntryOf(unit) {
+  return {
+    id: unit.id,
+    kind: unit.kind || 'fly',
+    dead: !!unit.dead,
+    runId: unit.runId || saveRunId,
+    originId: unit.originId || null,
+    captureId: unit.captureId || null,
+    capturedByNet: unit.capturedByNet === true,
+    serverId: typeof unit.serverId === 'string' && unit.serverId.length ? unit.serverId : null,
+    sex: unit.sex === 'm' ? 'm' : 'f',
+    color: unit.color || 'wild',
+    codon: typeof unit.codon === 'string' ? unit.codon : '',
+    geno: typeof unit.geno === 'string' ? unit.geno : '',
+    gene_d: Number.isInteger(unit.gene_d) ? unit.gene_d : null,
+    gene_p: Number.isInteger(unit.gene_p) ? unit.gene_p : null,
+    genoVerified: genotypeOf(unit).genoVerified,
+    seed: Number.isFinite(unit.seed) ? unit.seed : 0,
+    scale: Number.isFinite(unit.scale) && unit.scale > 0 ? unit.scale : 1,
+    liveMs: Number.isFinite(unit.liveMs) && unit.liveMs >= 0 ? unit.liveMs : null,
+    mates: Number.isInteger(unit.mates) && unit.mates >= 0 ? unit.mates : null,
+    parents: unit.parents ? structuredClone(unit.parents) : null,
+  };
+}
+
+// 制作事务期间冻结瓶内与捕捉相关操作，避免 prepare 与 commit 之间换档。
+function handleCabinetRequest(message) {
+  const name = message && message.name;
+  const arg = (message && message.arg) || {};
+  const requestId = message && message.requestId;
+  const reply = (result, error) => {
+    if (window.fly && window.fly.sendCabinetReply) {
+      window.fly.sendCabinetReply({requestId, result, error: error ? String((error && error.message) || error) : undefined});
+    }
+  };
+  try {
+    let result = {};
+    if (name === CABINET_REQUESTS.ORIGINS) {
+      // 恢复核对：主进程交回已消费身份，游戏据此把不该留在瓶内的个体清掉。
+      if (arg.runId !== saveRunId) throw Error('恢复存档世代不一致');
+      cabinetConsumed = new Set(arg.origins || []);
+      cabinetJarConsumed = new Map((arg.jarCaptures || []).map((v) => [v.originId, v.captureId]));
+      cabinetReconcile();
+      result = {afterSnapshot: cabinetSnapshot()};
+    } else if (name === CABINET_REQUESTS.LIST) {
+      cabinetState();
+      result = {items: cabinetBottleAdults().map((u) => bottleEntryOf(u))};
+    } else if (name === CABINET_REQUESTS.PREPARE) {
+      if (cabinetTransaction) throw Error('已有标本正在制作');
+      if (listingBusy) throw Error('正在上架 请等待交易完成');
+      if (!arg.runId || !arg.originId || !arg.captureId || !arg.transactionId) throw Error('制作准备参数不完整');
+      if (arg.runId !== saveRunId) throw Error('存档世代已变化 请重新选择');
+      const unit = findCabinetJarAdult(arg.originId, arg.captureId);
+      const serverBacked = !!(unit && typeof unit.serverId === 'string' && unit.serverId.length);
+      const snapshotOnly = arg.collectionMode === 'snapshot';
+      if (!unit || (serverBacked && (!snapshotOnly || unit.capturedByNet !== true)) || (snapshotOnly && !serverBacked) || cabinetConsumed.has(arg.originId)) {
+        throw Error('该个体已被释放、出售或入瓶状态变化 请重新选择瓶内活成虫');
+      }
+      cabinetTransaction = {id: arg.transactionId, originId: arg.originId, captureId: arg.captureId, snapshotOnly};
+      result = {adult: cabinetDescribe(unit), image: cabinetImage(unit), beforeSnapshot: cabinetSnapshot()};
+    } else if (name === CABINET_REQUESTS.COMMIT) {
+      if (arg.runId !== saveRunId || !cabinetTransaction
+        || cabinetTransaction.id !== arg.transactionId
+        || cabinetTransaction.originId !== arg.originId
+        || cabinetTransaction.captureId !== arg.captureId) throw Error('制作事务不匹配');
+      if (cabinetTransaction.snapshotOnly) throw Error('捕捉快照禁止移除活体');
+      const held = findCabinetJarAdult(arg.originId, arg.captureId);
+      if (!held || (typeof held.serverId === 'string' && held.serverId.length > 0)) throw Error('瓶内个体状态已变化 本次制作已失效');
+      cabinetConsumed.add(arg.originId);
+      cabinetJarConsumed.set(arg.originId, arg.captureId);
+      // 用瓶内对象的唯一 id 精确移除，避免 originId/captureId 匹配落空导致「假移除」。
+      const before = jar.length;
+      jar = jar.filter((u) => u.id !== held.id);
+      if (jar.length === before) throw Error('移除瓶内个体失败 请刷新后重试');
+      jarSel.delete(held.id);
+      cabinetTransaction = null;
+      drainCabinetRestocks();
+      jarHint = '';
+      publishJar();
+      publishLife();
+      result = {removed: true, afterSnapshot: cabinetSnapshot()};
+    } else if (name === CABINET_REQUESTS.RECONCILE) {
+      if (arg.runId !== saveRunId) throw Error('存档世代不一致 暂不核对');
+      // 核对：瓶子找不到时还要确认它确实不在桌面（放回/已出售），才算移除完成。
+      cabinetConsumed.add(arg.originId);
+      cabinetJarConsumed.set(arg.originId, arg.captureId);
+      const removedFromJar = cabinetRemove(arg.originId, arg.captureId);
+      const stillOnDesktop = flies.some((f) => f.originId === arg.originId && f.state !== 'dead');
+      if (cabinetTransaction && cabinetTransaction.id === arg.transactionId) cabinetTransaction = null;
+      drainCabinetRestocks();
+      jarHint = '';
+      publishJar();
+      publishLife();
+      result = {removed: !stillOnDesktop, wasInJar: removedFromJar, afterSnapshot: cabinetSnapshot()};
+    } else if (name === CABINET_REQUESTS.REMOVE_LISTED) {
+      if (arg.runId !== saveRunId) throw Error('存档世代已变化');
+      const held = findCabinetJarAdult(arg.originId, arg.captureId);
+      if (held) {
+        cabinetConsumed.add(arg.originId);
+        cabinetJarConsumed.set(arg.originId, arg.captureId);
+        jar = jar.filter((u) => u.id !== held.id);
+        jarSel.delete(held.id);
+        jarHint = '';
+        publishJar();
+        publishLife();
+      }
+      result = {removed: !!held, afterSnapshot: cabinetSnapshot()};
+    } else if (name === CABINET_REQUESTS.ABORT) {
+      if (cabinetTransaction && cabinetTransaction.id === arg.transactionId) cabinetTransaction = null;
+      drainCabinetRestocks();
+      result = {ok: true};
+    } else throw Error('未知的名蛆堂请求：' + String(name));
+    reply(result);
+  } catch (error) {
+    if (name === CABINET_REQUESTS.PREPARE && cabinetTransaction && cabinetTransaction.id === arg.transactionId) { cabinetTransaction = null; drainCabinetRestocks(); }
+    reply(null, error);
+  }
+}
+
+// 完整存档快照（复用真实 snapshot()，绝不丢任何 0.4.2 字段与计时打包）。
+function cabinetSnapshot() {
+  return snapshot();
+}
 
 function screenOf(x, y) {
   return screens.find((s) => x >= s.x && x < s.x + s.w && y >= s.y && y < s.y + s.h) || null;
@@ -609,14 +1000,24 @@ function spawnFly(x, y, opts = {}) {
     eatingFood: 0,
     eatTimer: 0,
     skipFood: 0,
-    born: performance.now(),
-    ripe: false,
-    needMeal: true,
-    eatUnits: 0,
-    mealDoneAt: 0,
-    mates: 0,
+    born: opts.born || performance.now(),
+    ripe: !!opts.ripe,
+    needMeal: opts.needMeal != null ? !!opts.needMeal : true,
+    eatUnits: opts.eatUnits || 0,
+    mealDoneAt: opts.mealDoneAt || 0,
+    mates: opts.mates || 0,
+    liveMs: opts.liveMs || 0,
+    retired: !!opts.retired,
+    kidSeen: !!opts.kidSeen,
+    kidDieAt: opts.kidDieAt,
+    dieAt: opts.dieAt,
     sex: opts.sex || (Math.random() < 0.5 ? 'm' : 'f'),
     serverId: opts.serverId || null,
+    genoSource: opts.genoSource || null,
+    runId: opts.runId || null,
+    originId: opts.originId || null,
+    parents: opts.parents ? structuredClone(opts.parents) : null,
+    lifeStartedActiveMs: Number.isFinite(opts.lifeStartedActiveMs) ? opts.lifeStartedActiveMs : null,
     color: opts.color || 'wild',
     codon: opts.codon == null ? '1' : String(opts.codon),
     gene_d: opts.gene_d == null ? 1 : opts.gene_d,
@@ -630,6 +1031,8 @@ function spawnFly(x, y, opts = {}) {
     f.y = p.y;
   }
   flies.push(f);
+  // 普通出现：任何新成虫（自然出现、羽化、瓶内放回）都在这里计入遇见索引。
+  if (encounterChannelReady && (!f.kind || f.kind === 'fly')) delayEncounter(f, 'appeared');
   return f;
 }
 
@@ -840,7 +1243,7 @@ async function spawnServerFlies() {
   const got = [];
   for (let i = 0; i < 2; i++) {
     try {
-      const res = await window.fly.spawnFly();
+      const res = await window.fly.spawnFly(i === 0 ? 'm' : 'f');
       if (res && res.ok && res.fly) got.push(res.fly);
     } catch (e) { /* 网络失败 */ }
   }
@@ -856,8 +1259,10 @@ async function spawnServerFlies() {
   holdBoot = false;
   for (let i = 0; i < got.length; i++) {
     const perch = i === 0 ? a : b;
-    const f = spawnFly(0, 0, { perch, sex: i === 0 ? 'm' : 'f', serverId: got[i].id, color: got[i].color, codon: got[i].codon || '', geno: got[i].geno || '' });
+    const f = spawnFly(0, 0, { perch, sex: got[i].sex || (i === 0 ? 'm' : 'f'), serverId: got[i].id, color: got[i].color, codon: got[i].codon || '', geno: got[i].geno || '' });
+    if (f) f.genoSource = 'server';
     if (f) f.needMeal = false;
+    delayEncounter(f || got[i], 'purchase');
   }
   spawnFood();
   spawnFood();
@@ -867,10 +1272,15 @@ async function spawnServerFlies() {
 async function addServerFly(sex) {
   if (window.fly && window.fly.spawnFly) {
     try {
-      const res = await window.fly.spawnFly();
+      const res = await window.fly.spawnFly(sex);
       if (res && res.ok && res.fly) {
-        const f = spawnFly(W * 0.5, H * 0.4, { sex, serverId: res.fly.id, color: res.fly.color, codon: res.fly.codon || '', geno: res.fly.geno || '' });
-        if (f) { f.needMeal = true; return; }
+        const f = spawnFly(W * 0.5, H * 0.4, { sex: res.fly.sex || sex, serverId: res.fly.id, color: res.fly.color, codon: res.fly.codon || '', geno: res.fly.geno || '' });
+        if (f) {
+          f.genoSource = res.fly.geno ? 'server' : null;
+          f.needMeal = true;
+          delayEncounter(f, 'purchase');
+          return;
+        }
       }
     } catch (e) { /* 失败走本地 fallback */ }
   }
@@ -1650,6 +2060,7 @@ function buyWhiteFly() {
     sex: Math.random() < 0.5 ? 'm' : 'f',
   });
   if (f) f.needMeal = true;
+  if (f) delayEncounter(f, 'purchase');
   return true;
 }
 
@@ -1814,6 +2225,7 @@ async function layEggs(x, y, mom, dad, firstOf, clone) {
   const room = breed ? Math.max(0, BREED_EGGS - eggs.length) : want;
   const n = Math.min(want, room);
   const from = clone ? null : (firstOf && firstOf.length ? firstOf.slice() : null);
+  const parents = parentsAtLay(mom, dad, clone);
   const sexes = clone ? Array.from({ length: n }, () => (mom && mom.sex) || 'f') : clutchSexes(n);
   const useServer = !clone && !!(mom && dad && mom.serverId && dad.serverId && window.fly && window.fly.breed);
   let localEggs = null;
@@ -1835,12 +2247,13 @@ async function layEggs(x, y, mom, dad, firstOf, clone) {
     if (useServer) {
       try {
         const appendFrom = i === 0 ? dad.serverId : i === 1 ? mom.serverId : null;
-        const res = await window.fly.breed(mom.serverId, dad.serverId, appendFrom);
+        const res = await window.fly.breed(mom.serverId, dad.serverId, appendFrom, sexes[i]);
         if (res && res.ok && res.fly) {
           serverId = res.fly.id;
           codon = res.fly.codon || codon;
           geno = res.fly.geno || '';
           color = res.fly.color || colorFromCodon(codon, 'wild');
+          if (res.fly.sex) sexes[i] = res.fly.sex;
         }
       } catch (e) { /* 网络失败，用本地 fallback */ }
     } else if (localEggs && localEggs[i]) {
@@ -1852,6 +2265,10 @@ async function layEggs(x, y, mom, dad, firstOf, clone) {
       blood = e.bloodOut || {};
     }
     eggs.push({
+      // 基因来源在产卵这一刻定下：服务器配种结果标记 server，本机遗传引擎的
+      // 真值标记 local；其余一律不标，永远显示未知。
+      genoSource: geno || serverId ? 'server' : (localEggs && localEggs[i] ? 'local' : null),
+      parents: parents ? structuredClone(parents) : null,
       x: x + rand(-12, 12),
       y: y + rand(-10, 10),
       rot: rand(0, Math.PI),
@@ -1886,7 +2303,10 @@ function jarRandPos() {
 }
 
 function intoJar(kind, extra) {
+  if (cabinetTransaction) return;
   const p = jarRandPos();
+  ensureUnitIdentity(extra, saveRunId);
+  const captureId = kind === 'fly' && !extra.captureId ? newId() : extra.captureId;
   jar.push({
     id: extra.id || nextId++,
     kind,
@@ -1896,6 +2316,13 @@ function intoJar(kind, extra) {
     vy: rand(-30, 30),
     heading: extra.heading || rand(0, Math.PI * 2),
     sex: extra.sex || 'f',
+    genoSource: extra.genoSource || null,
+    runId: extra.runId,
+    originId: extra.originId,
+    captureId,
+    capturedByNet: extra.capturedByNet === true,
+    parents: extra.parents ? structuredClone(extra.parents) : null,
+    lifeStartedActiveMs: Number.isFinite(extra.lifeStartedActiveMs) ? extra.lifeStartedActiveMs : null,
     serverId: extra.serverId || null,
     color: extra.color || 'wild',
     codon: extra.codon || '',
@@ -1908,6 +2335,20 @@ function intoJar(kind, extra) {
     seed: extra.seed || rand(0, 80),
     t: extra.t || performance.now(),
     inMs: 0,
+    // 本体档案：进瓶不丢寿命/交配次数/成熟状态，瓶内死因单独记在 inMs/dead
+    liveMs: extra.liveMs || 0,
+    mates: extra.mates || 0,
+    born: extra.born || performance.now(),
+    ripe: !!extra.ripe,
+    needMeal: extra.needMeal != null ? !!extra.needMeal : true,
+    eatUnits: extra.eatUnits || 0,
+    mealDoneAt: extra.mealDoneAt || 0,
+    retired: !!extra.retired,
+    kidSeen: !!extra.kidSeen,
+    kidDieAt: extra.kidDieAt,
+    dieAt: extra.dieAt,
+    // 存货（买来/下架退回）不在瓶里憋死；捕捉的野蝇才受 2 分钟死因
+    stock: !!extra.stock,
   });
 }
 
@@ -1943,6 +2384,7 @@ function throwNet(now) {
 }
 
 function catchNet(now) {
+  if (cabinetTransaction) return;
   let best = null;
   let bestD = NET_R + 0.01;
   const consider = (item, kind, x, y) => {
@@ -1962,6 +2404,7 @@ function catchNet(now) {
   const it = best.item;
   if (best.kind === 'fly') {
     interruptEat(it);
+    it.capturedByNet = true;
     intoJar('fly', it);
     it.state = 'dead';
     flies = flies.filter((f) => f.state !== 'dead');
@@ -1989,10 +2432,12 @@ function bounceJar(u) {
 function stepJar(dt, now) {
   for (const u of jar) {
     if (u.dead) continue;
-    u.inMs = (u.inMs || 0) + dt * 1000;
-    if (u.inMs >= JAR_DIE_MS) {
-      u.dead = true;
-      continue;
+    if (!u.stock) {
+      u.inMs = (u.inMs || 0) + dt * 1000;
+      if (u.inMs >= JAR_DIE_MS) {
+        u.dead = true;
+        continue;
+      }
     }
     if (u.kind === 'fly') {
       if (now > (u.turnT || 0)) {
@@ -2023,6 +2468,7 @@ function stepJar(dt, now) {
     } else if (u.kind === 'pupa') {
       if (now - u.t >= pupaMs()) {
         u.kind = 'fly';
+        delayEncounter(u, 'eclose');
         u.heading = rand(0, Math.PI * 2);
       }
     }
@@ -2033,10 +2479,13 @@ function stepJar(dt, now) {
 let listingBusy = false;
 
 async function sellSelectedJar(note, points) {
+  if (cabinetTransaction) { jarHint = '正在制作标本 请稍候'; publishJar(); return; }
   if (flavorAnnoy) { jarHint = '造福版不上架'; publishJar(); return; }
   const caption = String(note || '').trim();
   if (!caption) { jarHint = '请先备注再上架'; publishJar(); return; }
   if (listingBusy) { jarHint = '正在上架，别连点'; publishJar(); return; }
+  listingBusy = true;
+  try {
   const sel = [...jarSel];
   if (!sel.length) { jarHint = '先选中要上架的'; publishJar(); return; }
   const units = sel.map((id) => jar.find((x) => x.id === id)).filter(Boolean);
@@ -2045,6 +2494,7 @@ async function sellSelectedJar(note, points) {
     const g = await window.fly.ensureGuest();
     if (!g || !g.ok) { jarHint = '游客上架失败：' + ((g && g.error) || '未登录'); publishJar(); return; }
   }
+  if (units.some(u => !jar.includes(u) || u.dead || u.state === 'dead')) { jarHint = '瓶内个体状态已变化 请重新选择'; publishJar(); return; }
   for (const u of units) {
     if (u.serverId) continue;
     u.serverId = (typeof crypto !== 'undefined' && crypto.randomUUID)
@@ -2060,20 +2510,18 @@ async function sellSelectedJar(note, points) {
   const price = Math.max(0, Math.floor(Number(points) || 0));
   if (!(price >= 1)) { jarHint = '上架前要设置积分'; publishJar(); return; }
   const want = String(price);
-  listingBusy = true;
   jarHint = '上架中…';
   publishJar();
-  let res;
-  try {
-    res = await window.fly.createListing(kind, flyIds, caption, want, limited[0].instar || null, limited[0].color || 'wild', {
+  const res = await window.fly.createListing(kind, flyIds, caption, want, limited[0].instar || null, limited[0].color || 'wild', {
       codon: limited[0].codon || '',
       geno: limited[0].geno || '',
       gene_d: limited[0].gene_d,
       gene_p: limited[0].gene_p,
+      liveMs: limited[0].liveMs || 0,
+      mates: limited[0].mates || 0,
+      sex: limited[0].sex || 'f',
+      image: flySnapshot(limited[0]) || null,
     });
-  } finally {
-    listingBusy = false;
-  }
   if (res && res.ok) {
     const gone = new Set(limited.map((u) => u.id));
     jar = jar.filter((u) => !gone.has(u.id));
@@ -2088,25 +2536,50 @@ async function sellSelectedJar(note, points) {
     jarHint = '上架失败：' + ((res && res.error) || '未知');
   }
   publishJar();
+  } finally { listingBusy = false; }
+}
+
+function drainCabinetRestocks() {
+  if (cabinetTransaction || !cabinetRestockQueue.length) return;
+  const items = cabinetRestockQueue.splice(0);
+  restockJar(items);
+  flushSave();
 }
 
 function restockJar(items) {
+  if (cabinetTransaction) {
+    cabinetRestockQueue.push(...structuredClone(items || []));
+    // 到账已由服务器确认，排队期间也保存，不能静默丢掉物品。
+    flushSave();
+    return;
+  }
   for (const it of items || []) {
     if (!it) continue;
     const sid = it.serverId;
     if (sid && jar.some((u) => u.serverId === sid)) continue;
-    intoJar(it.kind || 'fly', {
+    intoJar(it.source === 'live' ? 'fly' : (it.kind || 'fly'), {
       serverId: sid,
+      sex: it.sex || 'f',
       color: it.color || 'wild',
       codon: it.codon || '',
       geno: it.geno || '',
+      genoSource: it.genoSource || (it.geno ? 'server' : null),
       gene_d: it.gene_d,
       gene_p: it.gene_p,
       blood: it.blood,
       instar: it.instar || 1,
+      liveMs: it.liveMs || 0,
+      mates: it.mates || 0,
+      stock: true,
     });
   }
   jarHint = items && items.length ? '货已进瓶子' : '已下架';
+  for (const it of items || []) {
+    if (!it || (it.kind || 'fly') !== 'fly' || it.dead) continue;
+    // 来源只沿用可信标记，不凭 gene_d/gene_p 的旧默认值推断本机真值。
+    if (!it.genoSource && it.geno) it.genoSource = 'server';
+    delayEncounter(it, 'unlist');
+  }
   publishJar();
 }
 
@@ -2127,11 +2600,9 @@ async function unlistToJar(id) {
 
 function publishJar() {
   if (!window.fly || !window.fly.sendBottle) return;
-  window.fly.sendBottle({ hint: jarHint, count: jar.length });
+  window.fly.sendBottle({ hint: jarHint, count: jar.length, items: jar.map((u) => bottleEntryOf(u)) });
   if (jarHint && /失败|超时|编号/.test(jarHint) && window.fly.reportBug) {
-    if (!/fetch failed|请求超时|超时/.test(jarHint)) {
-      window.fly.reportBug(jarHint, { extra: { where: 'jar' } });
-    }
+    window.fly.reportBug(jarHint, { extra: { where: 'jar' } });
   }
 }
 
@@ -2143,6 +2614,7 @@ function pruneJarSel() {
 }
 
 function jarKill(id) {
+  if (cabinetTransaction) return;
   jar = jar.filter((u) => u.id !== id);
   jarSel.delete(id);
   jarHint = '';
@@ -2150,6 +2622,7 @@ function jarKill(id) {
 }
 
 function jarKillSel() {
+  if (cabinetTransaction) return;
   for (const id of [...jarSel]) jar = jar.filter((u) => u.id !== id);
   jarSel = new Set();
   jarHint = '';
@@ -2162,6 +2635,7 @@ function jarSelectAll() {
 }
 
 function jarFreeSel() {
+  if (cabinetTransaction) return;
   let ids = [...jarSel];
   if (!ids.length) ids = jar.map((u) => u.id);
   if (!ids.length) {
@@ -2176,13 +2650,21 @@ function jarFreeSel() {
 }
 
 function jarFree(id) {
+  if (cabinetTransaction) return;
   const u = jar.find((x) => x.id === id);
   if (!u) return;
   const drop = {
     x: netCx || (bottle ? bottle.x + bottle.w + 36 : 0) || (W * 0.5),
     y: netCy || (bottle ? bottle.y + 80 : 0) || (H * 0.4),
   };
-  if (u.dead) {
+  const now = performance.now();
+  // 瓶内憋死（捕捉的野蝇）或本体寿终，才变尸体；存货憋不死，寿命没到就按本体放回。
+  const bodyDead = u.kind === 'fly' && (
+    (u.liveMs || 0) >= LIFE_MS
+    || (u.dieAt && now >= u.dieAt)
+    || (u.kidDieAt && !u.dieAt && now >= u.kidDieAt)
+  );
+  if (u.dead || bodyDead) {
     corpses.push({
       id: nextId++, kind: 'fly',
       x: drop.x + rand(-6, 6), y: drop.y + rand(-6, 6),
@@ -2203,27 +2685,44 @@ function jarFree(id) {
   }
   if (u.kind === 'fly') {
     const f = spawnFly(drop.x, drop.y, {
+      genoSource: u.genoSource || null,
+      runId: u.runId || null,
+      originId: u.originId || null,
+      parents: u.parents ? structuredClone(u.parents) : null,
+      lifeStartedActiveMs: Number.isFinite(u.lifeStartedActiveMs) ? u.lifeStartedActiveMs : null,
       sex: u.sex, serverId: u.serverId, color: u.color || 'wild', codon: u.codon || '',
       gene_d: u.gene_d, gene_p: u.gene_p, blood: u.blood, geno: u.geno,
       seed: u.seed, scale: u.scale,
+      liveMs: u.liveMs, mates: u.mates, born: u.born, ripe: u.ripe,
+      needMeal: u.needMeal, eatUnits: u.eatUnits, mealDoneAt: u.mealDoneAt,
+      retired: u.retired, kidSeen: u.kidSeen, kidDieAt: u.kidDieAt, dieAt: u.dieAt,
     });
     if (!f) {
       jarHint = '成虫已满 12，放不出。';
       publishJar();
       return;
     }
-    f.needMeal = true;
     f.state = 'fly';
     f.mission = 'land';
   } else if (u.kind === 'egg') {
     if (breed && eggs.length >= BREED_EGGS) { jarHint = '卵已满，放不出。'; publishJar(); return; }
     eggs.push({
+      ...cabinetResearch(u),
+      genoSource: u.genoSource || null,
+      geno: typeof u.geno === 'string' ? u.geno : '',
+      gene_d: u.gene_d, gene_p: u.gene_p, blood: u.blood,
+
       x: drop.x + rand(-10, 10), y: drop.y + rand(-10, 10), rot: rand(0, Math.PI),
       t: performance.now(), seed: u.seed, serverId: u.serverId, color: u.color || 'wild', codon: u.codon || '', sex: u.sex, firstOf: null,
     });
   } else if (u.kind === 'larva') {
     if (breed && larvae.length >= BREED_LARVAE) { jarHint = '蛆已满，放不出。'; publishJar(); return; }
     larvae.push({
+      ...cabinetResearch(u),
+      genoSource: u.genoSource || null,
+      geno: typeof u.geno === 'string' ? u.geno : '',
+      gene_d: u.gene_d, gene_p: u.gene_p, blood: u.blood,
+
       id: nextId++, x: drop.x, y: drop.y, heading: u.heading, instar: u.instar || 1,
       eatTimer: 0, skipFood: 0, eatingFood: 0, eatUnits: 0, nextTurn: performance.now(),
       seed: u.seed, vx: 0, vy: 0, serverId: u.serverId, color: u.color || 'wild', codon: u.codon || '', sex: u.sex, firstOf: null,
@@ -2231,6 +2730,11 @@ function jarFree(id) {
   } else if (u.kind === 'pupa') {
     if (breed && pupae.length >= BREED_PUPAE) { jarHint = '蛹已满，放不出。'; publishJar(); return; }
     pupae.push({
+      ...cabinetResearch(u),
+      genoSource: u.genoSource || null,
+      geno: typeof u.geno === 'string' ? u.geno : '',
+      gene_d: u.gene_d, gene_p: u.gene_p, blood: u.blood,
+
       x: drop.x, y: drop.y, rot: u.heading, t: u.t, seed: u.seed,
       serverId: u.serverId, color: u.color || 'wild', codon: u.codon || '',
       sex: u.sex, firstOf: null,
@@ -2415,6 +2919,9 @@ function hatchEgg(e, now) {
     seed: e.seed,
     vx: 0,
     vy: 0,
+    genoSource: e.genoSource || null,
+    parents: e.parents ? structuredClone(e.parents) : null,
+    lifeStartedActiveMs: cabinetActiveMs,
     serverId: e.serverId,
     color: e.color || 'wild',
     codon: e.codon || '',
@@ -2515,6 +3022,9 @@ function settlePupa(x, y, rot) {
 function pupate(L, now) {
   const at = settlePupa(L.x, L.y, L.heading);
   pupae.push({
+    genoSource: L.genoSource || null,
+    parents: L.parents ? structuredClone(L.parents) : null,
+    lifeStartedActiveMs: L.lifeStartedActiveMs,
     x: at.x,
     y: at.y,
     rot: L.heading,
@@ -2534,6 +3044,9 @@ function pupate(L, now) {
 
 function eclose(p, now) {
   const f = spawnFly(p.x, p.y, {
+    genoSource: p.genoSource || (p.geno || p.serverId ? 'server' : null),
+    parents: p.parents ? structuredClone(p.parents) : null,
+    lifeStartedActiveMs: Number.isFinite(p.lifeStartedActiveMs) ? p.lifeStartedActiveMs : null,
     serverId: p.serverId,
     color: p.color,
     codon: p.codon || '1',
@@ -2560,6 +3073,7 @@ function eclose(p, now) {
     }
   }
   noteFirstEclose(p.firstOf, now);
+  delayEncounter(p, 'eclose');
   return true;
 }
 
@@ -2738,9 +3252,11 @@ function iconBlocksWipe(x, y) {
 
 function wipeAt(x, y) {
   if (washLeftMs > 0) return;
+  if (iconBlocksWipe(x, y)) return;
   const r2 = RAG_R * RAG_R;
   const nowOn = new Set();
   const touch = (s, kind, fallback) => {
+    if (iconBlocksWipe(s.x, s.y)) return false;
     const dx = s.x - x;
     const dy = s.y - y;
     const hit = dx * dx + dy * dy <= r2;
@@ -3906,6 +4422,9 @@ function snapshot() {
   };
   return {
     v: 2,
+    runId: saveRunId,
+    cabinetActiveMs,
+    cabinetRestockQueue: structuredClone(cabinetRestockQueue),
     breed,
     cleared,
     breedMs,
@@ -3932,7 +4451,7 @@ function snapshot() {
     splats: splats.map((s) => packTimes({ ...s }, ['t'], now)),
     ragUses,
     washLeftMs,
-    jar: jar.map((u) => packTimes({ ...u }, ['t'], now)),
+    jar: jar.map((u) => packTimes({ ...u }, ['t', 'born', 'mealDoneAt', 'kidDieAt', 'dieAt'], now)),
   };
 }
 
@@ -3943,6 +4462,12 @@ function applyRestore(data) {
     return;
   }
   const now = performance.now();
+  saveRunId = typeof data.runId === 'string' && data.runId ? data.runId : (saveRunId || newId());
+  cabinetActiveMs = Number.isFinite(data.cabinetActiveMs) && data.cabinetActiveMs >= 0 ? data.cabinetActiveMs : 0;
+  cabinetRestockQueue = Array.isArray(data.cabinetRestockQueue) ? structuredClone(data.cabinetRestockQueue) : [];
+  cabinetTransaction = null;
+  cabinetConsumed = new Set();
+  cabinetJarConsumed = new Map();
   breed = !!data.breed;
   cleared = !!data.cleared;
   breedMs = Number(data.breedMs) || 0;
@@ -3967,10 +4492,21 @@ function applyRestore(data) {
   washLeftMs = Number(data.washLeftMs) || 0;
   if (data.points != null) localPoints = Number(data.points) || 0;
   if (data.cleanerLeft != null) cleanerLeft = Number(data.cleanerLeft) || 0;
-  jar = (data.jar || []).map((u) => unpackTimes({ ...u }, ['t'], now));
+  jar = (data.jar || []).map((u) => ensureUnitIdentity(unpackTimes({ ...u }, ['t', 'born', 'mealDoneAt', 'kidDieAt', 'dieAt'], now), saveRunId));
+  for (const f of flies) ensureUnitIdentity(f, saveRunId);
   booted = true;
   holdBoot = false;
   extinctSince = 0;
+  drainCabinetRestocks();
+  for (const f of flies) delayEncounter(f, 'restore');
+  // 恢复会重置 cabinetConsumed：必须立刻请主进程按 runId 重新同步/核对。
+  if (window.fly && window.fly.notifyCabinetRestored) window.fly.notifyCabinetRestored(saveRunId);
+  // 存档恢复时瓶内的活成虫同样是“实际出现过”的成虫，必须一并计入遇见索引。
+  for (const u of jar) {
+    if (u.kind !== 'fly' || u.dead) continue;
+    if (u.genoSource === undefined) u.genoSource = u.geno ? 'server' : null;
+    delayEncounter(u, 'restore');
+  }
   syncBinFood();
   syncPoints();
 }
@@ -3982,6 +4518,11 @@ function flushSave() {
 
 function startFresh() {
   holdBoot = false;
+  cabinetActiveMs = 0;
+  saveRunId = newId();
+  cabinetTransaction = null;
+  cabinetConsumed = new Set();
+  cabinetJarConsumed = new Map();
   breed = !flavorAnnoy;
   cleared = false;
   breedMs = 0;
@@ -3997,12 +4538,18 @@ function startFresh() {
 }
 
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  const nowPatchMs = Math.max(0, now - last);
+  const dt = Math.min(0.05, nowPatchMs / 1000);
   last = now;
   try {
     if (breed && !paused && !cleared && booted) breedMs += dt * 1000;
-    step(dt, now);
-    tickFanfare(now);
+    // 活跃时长按真实帧间隔累加；暂停或制作事务期间不计。
+    if (booted && !paused && !cabinetTransaction) cabinetActiveMs += nowPatchMs;
+    // 制作事务期间冻结一切成长/羽化/死亡推进（冻结仍要画，方便用户看到瓶内个体）。
+    if (!cabinetTransaction) {
+      step(dt, now);
+      tickFanfare(now);
+    }
     draw(now);
     lifeAcc += dt;
     if (lifeAcc > 0.4) {
@@ -4083,6 +4630,7 @@ addEventListener('keydown', (e) => {
 
 const api = window.fly;
 if (api) {
+  hydrateEncounters();
   api.onAmbient((d) => {
     if (d.grabbing != null) grabbing = !!d.grabbing;
     if (d.mouse) {
@@ -4177,6 +4725,7 @@ if (api) {
     if (d.x == null || d.y == null) return;
     trackTool(d.x, d.y);
   });
+  if (api.onCabinetRequest) api.onCabinetRequest((message) => handleCabinetRequest(message));
   api.onCmd((d) => {
     if (d.name === 'pause') paused = !!d.value;
     if (d.name === 'fast') fast = !!d.value;

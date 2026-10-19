@@ -35,6 +35,7 @@
       "preload.mjs",
       "preload-panel.mjs",
       "preload-shop.mjs",
+      "preload-cabinet.mjs",
       "package.json",
       "flavor.json",
       "renderer/**/*",

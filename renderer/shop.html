@@ -23,7 +23,7 @@
   .cats button { padding: 6px 12px; font-size: 13px; }
   .cats button.on { background: #2a241c; color: #fff; border-color: transparent; }
   .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-  .card canvas { display: block; width: 100%; height: auto; aspect-ratio: 160 / 72; margin: 0 0 8px; background: #fff; border-radius: 8px; object-fit: contain; }
+  .card canvas, .card img.thumb { display: block; width: 100%; height: auto; aspect-ratio: 160 / 72; margin: 0 0 8px; background: #fff; border-radius: 8px; object-fit: contain; }
   .card .note { font-weight: 600; margin: 0 0 4px; word-break: break-word; }
   .card .who { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
   .card .row { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -68,7 +68,7 @@
   const URL = "https://asfhegiiqhgaodpmqvlh.supabase.co";
   const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzZmhlZ2lpcWhnYW9kcG1xdmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNDU0MDAsImV4cCI6MjEwNTcyMTQwMH0._iFe4e77vDLX6vreQE8jci7az8_t1_U1sdnspmiALbQ";
   const KEY = "fly-shop-session";
-  const kindName = { fly: "果蝇", egg: "卵", larva: "幼虫", pupa: "蛹", item: "道具" };
+  const kindName = { fly: "果蝇", specimen: "果蝇标本", egg: "卵", larva: "幼虫", pupa: "蛹", item: "道具" };
   const CATS = [
     { id: "all", label: "全部" },
     { id: "egg", label: "卵", kinds: ["egg"] },
@@ -218,6 +218,22 @@
     return got.body;
   }
   function kindLabel(k) { return kindName[k] || k || ""; }
+  const colorNames = { wild: "褐色", mid: "中褐", deep: "深褐", white: "白色", green: "绿色", green2: "亮绿", red: "红色", red2: "亮红", yellow: "黄色", yellow2: "亮黄", mut: "更高突变" };
+  function colorLabel(c) { return colorNames[c] || c || ""; }
+  function genoLabel(l) {
+    if (l.geno) return l.geno;
+    if (l.gene_d != null && l.gene_p != null && [0, 1, 2].includes(l.gene_d) && [0, 1, 2].includes(l.gene_p)) {
+      const one = (n, d, r) => n >= 2 ? d + d : n <= 0 ? r + r : d + r;
+      return one(l.gene_d, "A", "a") + one(l.gene_p, "B", "b");
+    }
+    return "";
+  }
+  function lifeLabel(ms) {
+    if (ms == null || !Number.isFinite(ms)) return "";
+    const remain = Math.max(0, 15 * 60 * 1000 - ms);
+    const total = Math.floor(remain / 1000);
+    return "寿命 " + Math.floor(total / 60) + " 分 " + String(total % 60).padStart(2, "0") + " 秒";
+  }
   function matchCat(l) {
     if (cat === "all") return true;
     const c = CATS.find((x) => x.id === cat);
@@ -277,15 +293,35 @@
   function listingCard(l, withBid) {
     const card = document.createElement("div");
     card.className = "card";
-    const cv = document.createElement("canvas");
-    cv.width = 160; cv.height = 72;
-    drawThumb(cv, l.kind, l.color, l.quantity || 1);
-    card.appendChild(cv);
+    if (l.image && String(l.image).startsWith("data:image")) {
+      const img = document.createElement("img");
+      img.className = "thumb";
+      img.src = l.image;
+      img.alt = kindLabel(l.kind);
+      card.appendChild(img);
+    } else {
+      const cv = document.createElement("canvas");
+      cv.width = 160; cv.height = 72;
+      drawThumb(cv, l.kind, l.color, l.quantity || 1);
+      card.appendChild(cv);
+    }
     const note = document.createElement("div"); note.className = "note";
-    note.textContent = l.note || kindLabel(l.kind);
+    note.textContent = l.kind === "specimen" ? "果蝇标本" : (l.note || kindLabel(l.kind));
     const who = document.createElement("div"); who.className = "who";
     const price = Math.floor(Number(l.want) || 0);
-    who.textContent = kindLabel(l.kind) + " · " + (l.seller_email || "").split("@")[0] + " · ×" + (l.quantity || 1) + (price > 0 ? (" · " + price + "积分") : " · 未标积分") + (l.codon ? (" · " + l.codon) : "");
+    const info = [kindLabel(l.kind)];
+    if (l.color) info.push(colorLabel(l.color));
+    const geno = genoLabel(l);
+    if (geno) info.push(geno);
+    if (l.sex === "m" || l.sex === "f") info.push(l.sex === "m" ? "雄" : "雌");
+    const life = lifeLabel(l.live_ms);
+    if (life) info.push(life);
+    if (l.codon) info.push("基因码 " + l.codon);
+    const seller = (l.seller_email || "").split("@")[0];
+    if (seller) info.push(seller);
+    info.push("×" + (l.quantity || 1));
+    if (price > 0) info.push(price + "积分"); else info.push("未标积分");
+    who.textContent = info.join(" · ");
     const row = document.createElement("div"); row.className = "row";
     card.append(note, who, row);
     if (!withBid) {
@@ -349,7 +385,7 @@
 
   async function refresh() {
     syncMe();
-    const rows = await req("/rest/v1/listings?status=eq.open&select=id,seller_id,seller_email,kind,color,note,want,quantity,fly_id,fly_ids&order=created_at.desc&limit=80");
+    const rows = await req("/rest/v1/listings?status=eq.open&select=id,seller_id,seller_email,kind,color,note,want,quantity,fly_id,fly_ids,image,source,codon,geno,gene_d,gene_p,live_ms,mates,sex&order=created_at.desc&limit=80");
     listings = Array.isArray(rows) ? rows : [];
     render();
   }

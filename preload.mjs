@@ -14,13 +14,29 @@ contextBridge.exposeInMainWorld('fly', {
   putAway: () => ipcRenderer.send('swatter-off'),
   sendLife: (s) => ipcRenderer.send('life-stats', s),
   sendSnapshot: (s) => ipcRenderer.send('snapshot', s),
+  // 遇见索引上报：主进程落盘后回调，失败时追踪器会保留待写记录重试。
+  sendCabinetReply: (payload) => ipcRenderer.send('cabinet-reply', payload),
+  onCabinetRequest: (cb) => ipcRenderer.on('cabinet-request', (_e, d) => cb(d)),
+  notifyCabinetRestored: (runId) => ipcRenderer.send('cabinet-restored', runId),
+  seenEncounterColors: () => new Promise((resolve) => {
+    const once = (_e, data) => { ipcRenderer.removeListener('encounter-seen-colors-result', once); resolve(data); };
+    ipcRenderer.once('encounter-seen-colors-result', once);
+    ipcRenderer.send('encounter-seen-colors');
+  }),
+  sendEncounter: (payload, cb) => {
+    if (typeof cb === 'function') {
+      const once = (_e, data) => { ipcRenderer.removeListener('encounter-result', once); cb(data); };
+      ipcRenderer.once('encounter-result', once);
+    }
+    ipcRenderer.send('encounter-seen', payload);
+  },
   fanfare: (on) => ipcRenderer.send('fanfare', !!on),
   signIn: (email, password) => ipcRenderer.invoke('fly-signin', { email, password }),
   signOut: () => ipcRenderer.invoke('fly-signout'),
   currentUser: () => ipcRenderer.invoke('fly-current-user'),
-  spawnFly: () => ipcRenderer.invoke('fly-spawn'),
+  spawnFly: (sex) => ipcRenderer.invoke('fly-spawn', { sex }),
   ensureGuest: () => ipcRenderer.invoke('fly-ensure-guest'),
-  breed: (a, b, appendFrom) => ipcRenderer.invoke('fly-breed', { a, b, appendFrom }),
+  breed: (a, b, appendFrom, sex) => ipcRenderer.invoke('fly-breed', { a, b, appendFrom, sex }),
   submitRecord: (timeMs) => ipcRenderer.invoke('fly-submit-record', { timeMs }),
   submitMutation: (flyId) => ipcRenderer.invoke('fly-submit-mutation', { flyId }),
   addPoint: (n) => ipcRenderer.invoke('fly-add-point', { n }),

@@ -32,6 +32,7 @@
       margin: -8px 0 12px;
     }
     #captureSection { display: none; }
+    #captureSection[hidden] { display: none !important; }
     #captureSection.open { display: block; }
     h1 {
       font-size: 17px;
@@ -56,6 +57,12 @@
       font: inherit;
       cursor: pointer;
     }
+    #cabinetBox { margin-top: 14px; }
+    #openCabinet { box-sizing: border-box; color: #2b627d; border-color: #b7cbd3; transition: transform 160ms, background 160ms; }
+    #openCabinet:hover { transform: scale(1.015); background: #edf3f5; }
+    #openCabinet:focus-visible { outline: 2px solid #2b627d; outline-offset: 3px; }
+    #openCabinet:disabled { opacity: .5; cursor: default; }
+    @media (prefers-reduced-motion: reduce) { #openCabinet { transition: none; } #openCabinet:hover { transform: none; } }
     button:hover { filter: brightness(0.97); }
     button:active { transform: translateY(1px); }
     button.primary {
@@ -248,6 +255,10 @@
     <div class="stats" id="points">积分 0</div>
     <p class="note">打死一只 +1 积分</p>
     <button id="openSim" type="button">配种推演</button>
+    <div class="box" id="cabinetBox">
+      <div class="lab">名蛆堂</div>
+      <button id="openCabinet" type="button">名蛆堂 · 遇见索引</button>
+    </div>
     <div class="box" id="shopBox">
       <div class="lab">商店</div>
       <button id="officialMall" type="button">官方商城</button>

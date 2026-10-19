@@ -2,7 +2,7 @@
 // Overlay spans the virtual desktop; the panel is the app the user opens.
 
 import {
-  app, BrowserWindow, screen, globalShortcut, ipcMain, shell, Tray, Menu,
+  app, BrowserWindow, WebContentsView, screen, globalShortcut, ipcMain, shell, Tray, Menu,
 } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -15,6 +15,12 @@ import * as flyApi from './server-client.js';
 import { createRequire } from 'node:module';
 import { asBlood, simulateClutch, whiteChance } from './src/sim-engine.mjs';
 const { autoUpdater } = createRequire(import.meta.url)('electron-updater');
+import { registerCabinetPage } from './src/cabinet-window.mjs';
+import { openEncounters } from './src/encounter-store.mjs';
+import { registerEncounterBridge } from './src/encounter-bridge.mjs';
+import { openCabinet as openCabinetStore } from './src/cabinet-store.mjs';
+import { createCabinetRpc } from './src/cabinet-rpc.mjs';
+import { createCabinetService } from './src/cabinet-service.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ICON = path.join(HERE, 'assets', 'tray.png');
@@ -44,6 +50,13 @@ let autoStart = isAnnoy;
 
 let overlay = null;
 let panel = null;
+let cabinetController = null;
+let encounterBridge = null;
+let cabinetStore = null;
+let cabinetRpc = null;
+let cabinetService = null;
+let panelEncounterCount = null;
+let cabinetPageVisible = false;
 let tray = null;
 let simWin = null;
 let shopWin = null;
@@ -116,14 +129,6 @@ function applyAutoStart() {
   }
 }
 
-function startedFromLogin() {
-  if (process.argv.includes('--tray')) return true;
-  try {
-    if (app.getLoginItemSettings().wasOpenedAtLogin) return true;
-  } catch { /* */ }
-  return false;
-}
-
 function setupUpdater() {
   if (!app.isPackaged) return;
   try {
@@ -134,6 +139,122 @@ function setupUpdater() {
       autoUpdater.checkForUpdatesAndNotify().catch(() => {});
     }, 12000);
   } catch { /* 无网或未发过 Release 就跳过 */ }
+}
+
+function startedFromLogin() {
+  if (process.argv.includes('--tray')) return true;
+  try {
+    if (app.getLoginItemSettings().wasOpenedAtLogin) return true;
+  } catch { /* */ }
+  return false;
+}
+
+// 标本收藏与遇见索引分开保存；标本只记录真正在瓶内确认制作的个体。
+function createSpecimenStore() {
+  return openCabinetStore(path.join(app.getPath('userData'), 'specimens'));
+}
+
+// 制作事务要求“先保存、后移除”：这里必须写正式存档，失败要抛出去。
+function persistSnapshotStrict(data) {
+  if (!SAVE_FILE) throw Error('存档路径不可用');
+  if (!data || data.v !== 2) throw Error('存档资料无效');
+  const tmp = SAVE_FILE + '.cabinet.tmp';
+  const fd = fs.openSync(tmp, 'w');
+  try {
+    fs.writeFileSync(fd, JSON.stringify(data), 'utf8');
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  fs.renameSync(tmp, SAVE_FILE);
+  savedRun = data;
+}
+
+function listSpecimens() {
+  return cabinetStore ? cabinetStore.list() : [];
+}
+
+async function cabinetSell(arg) {
+  if (!cabinetStore) throw Error('展柜服务不可用');
+  const specimen = cabinetStore.list().find((s) => s.specimenId === (arg && arg.specimenId));
+  if (!specimen) throw Error('该收藏已不存在，请刷新');
+  const isLive = !!specimen.serverId;
+  const note = String((arg && arg.note) || '').trim();
+  if (!note) throw Error('请先写商品名');
+  const price = Math.max(0, Math.floor(Number((arg && arg.price) || 0)));
+  if (!(price >= 1)) throw Error('请设置积分');
+  const genes = {
+    codon: arg.codon != null ? String(arg.codon) : (specimen.codon || ''),
+    geno: specimen.geno || '',
+    gene_d: specimen.geneD,
+    gene_p: specimen.geneP,
+    liveMs: specimen.liveMs,
+    mates: specimen.mates,
+    sex: specimen.sex,
+    source: isLive ? 'live' : 'specimen',
+    image: arg.image || specimen.image || null,
+  };
+  let res;
+  if (isLive) {
+    if (!specimen.serverId) throw Error('活体缺少服务器编号，无法上架');
+    res = await flyApi.createListing('specimen', [specimen.serverId], note, String(price), null, specimen.color, genes);
+  } else {
+    res = await flyApi.createListing('specimen', [], note, String(price), null, specimen.color, genes);
+  }
+  if (!res || !res.ok) throw Error((res && res.error) || '上架失败');
+  cabinetStore.remove(specimen.specimenId);
+  if (isLive && cabinetRpc) {
+    try {
+      await cabinetRpc.request('remove-listed', { runId: specimen.runId, originId: specimen.originId, captureId: specimen.captureId });
+    } catch (e) { /* 活体移除失败不阻断上架，留待恢复核对收尾 */ }
+  }
+  cabinetController?.refresh();
+  return { ok: true };
+}
+
+function cabinetOrigins(runId) {
+  if (!cabinetStore) return {runId, origins: [], jarCaptures: []};
+  const records = [...cabinetStore.list().filter(entry => entry.source === 'manual'), ...cabinetStore.pendingReconciliations()]
+    .filter(entry => entry.runId === runId);
+  const unique = [...new Map(records.map(entry => [entry.originId, entry])).values()];
+  return {runId, origins: unique.map(entry => entry.originId),
+    jarCaptures: unique.map(entry => ({originId: entry.originId, captureId: entry.captureId}))};
+}
+
+// 恢复核对：把已消费身份交给游戏，再把 pending 事务真正收尾。
+// 必须在游戏完成 applyRestore 之后调用（恢复会重置游戏侧消费集）。
+async function syncCabinetAfterRestore(runId) {
+  if (!cabinetRpc || !cabinetService) return;
+  try {
+    const restored = await cabinetRpc.request('origins', cabinetOrigins(runId));
+    if (!restored?.afterSnapshot || restored.afterSnapshot.runId !== runId) throw Error('恢复存档核对失败');
+    persistSnapshotStrict(restored.afterSnapshot);
+    const result = await cabinetService.reconcile();
+    if (result && result.failed && result.failed.length) console.warn('标本恢复核对未完成', result.failed);
+  } catch (error) {
+    console.warn('标本恢复核对失败', (error && error.message) || error);
+  }
+}
+
+// 遇见索引与 cabinet.json 分开保存，只记录真正出现过的成虫体色。
+function createEncounterStore() {
+  return openEncounters(path.join(app.getPath('userData'), 'encounters'));
+}
+
+function listEncounters() {
+  if (!encounterBridge) return [];
+  return encounterBridge.list().map((record) => ({
+    color: record.color,
+    source: record.source,
+    codon: record.codon,
+    sex: record.sex,
+    geno: record.geno,
+    geneD: record.geneD,
+    geneP: record.geneP,
+    genoVerified: record.genoVerified === true,
+    firstSeenAt: record.firstSeenAt,
+    image: encounterBridge.readImage(record.imageFile),
+  }));
 }
 
 function loadSettings() {
@@ -233,7 +354,10 @@ function applyTool() {
     overlay.focus();
     raw = startRawMouse(overlay, () => pushToolCursor());
     pushToolCursor();
-    const ok = globalShortcut.register('Escape', putAwaySwatter);
+    const ok = globalShortcut.register('Escape', () => {
+      if (cabinetPageVisible) cabinetController?.requestEscape();
+      else putAwaySwatter();
+    });
     if (!ok) process.stderr.write('[tool] Escape shortcut failed\n');
   } else if (panel && !panel.isDestroyed()) {
     panel.focus();
@@ -640,7 +764,7 @@ let bottleHover = false;
 let bottlePrev = false;
 
 function bottleRect() {
-  if (!captureOpen) return null;
+  if (!captureOpen || cabinetPageVisible) return null;
   if (!overlay || overlay.isDestroyed()) return null;
   const ob = overlay.getBounds();
   let px = ob.x + ob.width;
@@ -723,6 +847,7 @@ if (!app.requestSingleInstanceLock()) {
     loadSettings();
     loadAssets();
     applyAutoStart();
+    setupUpdater();
     try {
       const s = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
       greenPeak = Number(s.greenPeak) || 0;
@@ -745,7 +870,52 @@ if (!app.requestSingleInstanceLock()) {
     overlay.on('resize', publishGeometry);
     overlay.on('move', publishGeometry);
 
+    cabinetStore = createSpecimenStore();
+    cabinetRpc = createCabinetRpc({
+      ipcMain,
+      trustedSender: () => (overlay && !overlay.isDestroyed() ? overlay.webContents : null),
+    });
+    cabinetService = createCabinetService({
+      store: cabinetStore,
+      requestOverlay: (name, arg) => cabinetRpc.request(name, arg),
+      persistSnapshot: persistSnapshotStrict,
+      onCommitted: () => cabinetController?.refresh(),
+    });
+    // 游戏完成 applyRestore 后立刻按 runId 重新同步已消费身份并收尾。
+    ipcMain.on('cabinet-restored', (event, runId) => {
+      if (!overlay || overlay.isDestroyed() || event.sender !== overlay.webContents) return;
+      if (event.senderFrame !== overlay.webContents.mainFrame) return;
+      if (typeof runId === 'string' && runId) syncCabinetAfterRestore(runId).catch(() => {});
+    });
+
+    encounterBridge = registerEncounterBridge({
+      ipcMain,
+      createStore: createEncounterStore,
+      trustedSender: () => (overlay && !overlay.isDestroyed() ? overlay.webContents : null),
+      onCountChanged: (n) => {
+        panelEncounterCount = n;
+        cabinetController?.refresh();
+      },
+    });
+
     panel = createPanel();
+    cabinetController = registerCabinetPage({
+      WebContentsView,ipcMain,appDirectory:HERE,parent:()=>panel,
+      listEncounters,
+      getWorkArea:bounds=>screen.getDisplayMatching(bounds).workArea,
+      listSpecimens,
+      cabinetAdults: () => cabinetService.listAdults(),
+      cabinetMake: (arg) => cabinetService.makeSpecimen(arg),
+      cabinetNote: (arg) => cabinetStore.updateNote(arg && arg.specimenId, (arg && arg.note) || ''),
+      cabinetName: (arg) => cabinetStore.updateName(arg && arg.specimenId, (arg && arg.name) || ''),
+      cabinetSell,
+      onVisibilityChanged:visible=>{
+        cabinetPageVisible=visible;
+        send('cmd',{name:'capture',value:captureOpen&&!visible});
+        if(visible){bottleHover=false;bottlePrev=false;applyBottleHover();}
+        else sendBottleRect();
+      },
+    });
     if (isAnnoy && startedFromLogin()) {
       hideToTray();
     } else {
@@ -754,7 +924,6 @@ if (!app.requestSingleInstanceLock()) {
     }
     panel.on('move', sendBottleRect);
     panel.on('resize', sendBottleRect);
-    setupUpdater();
 
     setTimeout(() => {
       if (!overlay || overlay.isDestroyed()) return;
@@ -808,7 +977,10 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.on('panel', (_e, msg) => {
       const name = msg?.name;
-      if (name === 'swatter') {
+      if (name === 'openCabinet') {
+        if (!panel || panel.isDestroyed() || _e.sender !== panel.webContents || _e.senderFrame !== panel.webContents.mainFrame) return;
+        cabinetController.open();
+      } else if (name === 'swatter') {
         swatterOn = !swatterOn;
         if (swatterOn) { ragOn = false; netOn = false; cleanerOn = false; }
         applyTool();
@@ -843,7 +1015,7 @@ if (!app.requestSingleInstanceLock()) {
         send('cmd', { name: 'jarUnlist', id: msg.id });
       } else if (name === 'capture') {
         captureOpen = !!(msg && msg.open);
-        send('cmd', { name: 'capture', value: captureOpen });
+        send('cmd', { name: 'capture', value: captureOpen && !cabinetPageVisible });
         if (captureOpen) sendBottleRect();
         else { bottleHover = false; bottlePrev = false; applyBottleHover(); }
         publishState();
@@ -922,8 +1094,8 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('fly-signout', async () => flyApi.signOut());
     ipcMain.handle('fly-ensure-guest', async () => flyApi.ensureGuest());
     ipcMain.handle('fly-current-user', async () => flyApi.currentUser());
-    ipcMain.handle('fly-spawn', async () => flyApi.spawnFly());
-    ipcMain.handle('fly-breed', async (_e, arg) => flyApi.breed(arg.a, arg.b, arg.appendFrom));
+    ipcMain.handle('fly-spawn', async (_e, arg) => flyApi.spawnFly(arg && arg.sex));
+    ipcMain.handle('fly-breed', async (_e, arg) => flyApi.breed(arg.a, arg.b, arg.appendFrom, arg.sex));
     ipcMain.handle('fly-submit-record', async (_e, arg) => flyApi.submitRecord(arg.timeMs));
     ipcMain.handle('fly-submit-mutation', async (_e, arg) => flyApi.submitMutation(arg.flyId));
     ipcMain.handle('fly-leaderboard', async () => flyApi.getLeaderboard());
@@ -934,7 +1106,7 @@ if (!app.requestSingleInstanceLock()) {
     function restockToJar(items) {
       if (!items || !items.length) return;
       captureOpen = true;
-      send('cmd', { name: 'capture', value: true });
+      send('cmd', { name: 'capture', value: captureOpen && !cabinetPageVisible });
       sendBottleRect();
       send('cmd', { name: 'jarRestock', items });
       if (panel && !panel.isDestroyed()) {
@@ -950,7 +1122,26 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('fly-shop-buy', async (_e, arg) => {
       const res = await flyApi.buyListing(arg && arg.id);
       if (res && res.ok) {
-        restockToJar((res.data && res.data.items) || []);
+        const items = (res.data && res.data.items) || [];
+        const live = items.filter((it) => it.source !== 'specimen');
+        const specimens = items.filter((it) => it.source === 'specimen');
+        if (live.length) restockToJar(live);
+        for (const it of specimens) {
+          if (cabinetStore) {
+            cabinetStore.importSpecimen({
+              color: it.color || 'wild',
+              sex: it.sex || 'f',
+              codon: it.codon || null,
+              geno: it.geno || null,
+              geneD: it.gene_d != null ? it.gene_d : null,
+              geneP: it.gene_p != null ? it.gene_p : null,
+              liveMs: it.liveMs || null,
+              mates: it.mates || null,
+              image: it.image || null,
+            });
+          }
+        }
+        cabinetController?.refresh();
         send('cmd', { name: 'syncPoints' });
       }
       return res;
@@ -993,6 +1184,9 @@ app.on('window-all-closed', () => {
 });
 app.on('before-quit', () => {
   app.isQuitting = true;
+  cabinetController?.dispose();
+  encounterBridge?.dispose();
+  cabinetRpc?.dispose();
   if (tray) {
     try { tray.destroy(); } catch { /* */ }
     tray = null;

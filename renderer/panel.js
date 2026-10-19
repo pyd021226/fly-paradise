@@ -645,3 +645,5 @@ addEventListener('error', (e) => {
 addEventListener('unhandledrejection', (e) => {
   if (api.reportBug) api.reportBug(String((e.reason && e.reason.message) || e.reason || 'promise'), { extra: { where: 'panel' } });
 });
+
+$('openCabinet').onclick = () => api.send('openCabinet');

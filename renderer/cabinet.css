@@ -1,0 +1,59 @@
+:root{color-scheme:light;--paper:#f8f7f2;--ink:#29342f;--muted:#667267;--line:#dce0d5;--blue:#2b627d;--card:#fffefa}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.7 "Segoe UI","Microsoft YaHei UI",sans-serif}
+button{font:inherit;cursor:pointer;transition:background 160ms,transform 160ms,border-color 160ms}
+button:hover:not(:disabled){background:#edf2f1;transform:scale(1.025)}
+button:active:not(:disabled){transform:scale(.97)}
+button:focus-visible{outline:2px solid var(--blue);outline-offset:4px}
+button:disabled{opacity:.5;cursor:wait}
+.book{max-width:1440px;min-height:100vh;margin:auto;padding:0 54px;display:flex;flex-direction:column;animation:appear 260ms ease-out}
+.masthead{height:74px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:20px}
+.brand{font-size:12px;letter-spacing:1px}.brand span{color:var(--muted)}
+#refresh{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid var(--line);border-radius:4px;color:var(--blue);background:transparent}
+#refresh svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5}
+main{flex:1}.opening{display:flex;align-items:center;justify-content:space-between;gap:32px;padding:38px 0 32px}
+.eyebrow{margin:0;color:var(--muted);font-size:9px;letter-spacing:2.5px}
+h1{font:400 49px/1.35 "SimSun","Songti SC",serif;letter-spacing:5px;margin:12px 0 13px}
+.title-stop{font-family:"Segoe UI",sans-serif;font-size:.8em;margin-left:7px}
+.intro{font-size:12px;letter-spacing:1px;color:var(--muted);margin:0;overflow-wrap:anywhere}
+.margin-note{flex-shrink:0;display:flex;flex-direction:column;gap:6px;font-size:10px;letter-spacing:1px;color:var(--muted)}
+.margin-note:after{content:"";width:34px;border-top:1px solid #aeb9a8;margin-top:7px}
+.collection-toolbar{display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted);padding-bottom:14px}
+.collection-label{color:var(--blue)}#count{margin-left:9px;font:11px Consolas,monospace}
+.collection-note{font-size:10px;max-width:60%;text-align:right}
+#status{font-size:12px;color:var(--muted);min-height:24px;padding-top:14px}
+.empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:40px 24px 78px;animation:appear 260ms ease-out}
+.empty[hidden]{display:none}
+.specimen-outline{width:110px;height:128px;fill:none;stroke:#b3beb0;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;margin-bottom:25px}
+.empty h2{font:400 24px/1.5 "SimSun","Songti SC",serif;letter-spacing:3px;margin:10px 0}
+.empty p:last-child{font-size:12px;color:var(--muted);margin:5px 0}
+footer{border-top:1px solid var(--line);padding:19px 0 24px;display:flex;justify-content:space-between;gap:20px;color:var(--muted);font-size:10px}
+footer span:first-child{font-size:8px;letter-spacing:2px}
+@keyframes appear{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media(max-width:760px){.book{padding:0 25px}.opening{gap:20px;padding:28px 0}h1{font-size:40px}.margin-note{display:none}.collection-note{max-width:120px;text-align:right}.empty{padding:35px 15px 55px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}button:hover:not(:disabled),button:active:not(:disabled){transform:none}}
+
+.header-actions{display:flex;align-items:center;gap:12px}#backToGame{display:flex;align-items:center;gap:8px;padding:7px 12px;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--blue);font-size:12px}#backToGame svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5}.book{transition:opacity 120ms,transform 120ms}body.leaving .book{opacity:0;transform:translateY(5px)}
+
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:18px;padding:22px 0 46px}
+#specimenGrid{grid-template-columns:repeat(auto-fill,minmax(232px,1fr))}
+.grid[hidden]{display:none}
+.card{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:6px;background:var(--card);padding:14px 14px 12px;animation:appear 260ms ease-out}
+.card-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.swatch{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.22);flex:0 0 auto}
+.card-name{font-size:14px;font-weight:600;letter-spacing:.5px}
+.card-grade{margin-left:auto;font:10px Consolas,monospace;color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:1px 5px}
+.card-kind{margin-left:6px;font:10px Consolas,monospace;color:var(--blue);border:1px solid var(--line);border-radius:3px;padding:1px 5px}
+.card-shot{border:1px solid var(--line);border-radius:4px;background:#fdfcf7;overflow:hidden}
+.card-shot img{display:block;width:100%;height:132px;object-fit:contain}
+.card-shot .noimg{display:flex;align-items:center;justify-content:center;height:132px;font-size:11px;color:var(--muted)}
+.card-meta{margin-top:10px;font-size:12px;line-height:1.85;color:var(--muted)}
+.card-meta .row{display:flex;gap:8px;justify-content:space-between}
+.card-meta .k{flex:0 0 auto}
+.card-meta .v{text-align:right;color:var(--ink);font-family:Consolas,"Microsoft YaHei UI",monospace;word-break:break-all}
+.card-meta .v.unknown{color:var(--muted);font-family:inherit}
+.card-foot{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line);font-size:10px;color:var(--muted);display:flex;justify-content:space-between;gap:10px}
+@media(max-width:760px){.grid{grid-template-columns:1fr;gap:14px}}
+
+[hidden]{display:none!important}.tabs{display:flex;gap:24px;border-bottom:1px solid var(--line);margin-bottom:20px}.tabs button{border:0;border-bottom:2px solid transparent;padding:10px 2px;background:transparent;color:var(--muted)}.tabs button[aria-selected=true]{color:var(--blue);border-color:var(--blue)}.tabs span{font:11px Consolas,monospace;margin-left:6px}
+.primary{background:var(--blue);color:white;border:1px solid var(--blue);border-radius:4px;padding:7px 13px}.primary:hover:not(:disabled){background:#224e65}.quiet{font-size:11px;color:var(--muted)}.edit-form{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px}.edit-form label{display:block;width:100%;font-size:11px;color:var(--muted)}input,textarea,select{font:inherit;border:1px solid var(--line);border-radius:4px;padding:8px;background:#fff;color:var(--ink);width:100%;min-width:0}textarea{resize:vertical}input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}.edit-form button,.dialog-actions button:not(.primary){border:1px solid var(--line);border-radius:4px;background:white;padding:5px 12px;color:var(--blue)}.edit-form button{margin-left:auto}.save-message{font-size:11px;color:var(--blue);min-height:18px;overflow-wrap:anywhere}dialog{border:1px solid var(--line);border-radius:10px;color:var(--ink);background:white;max-width:540px;width:calc(100% - 32px);padding:0;box-shadow:0 20px 70px #152f4433;animation:appear 180ms ease-out}dialog::backdrop{background:#152b4055}.dialog-body{padding:28px}dialog h2{font:400 28px/1.5 'SimSun',serif;margin:8px 0}dialog p{font-size:12px}dialog label{display:block;margin:20px 0 8px;font-size:12px}.dialog-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:24px}.card[data-grade=S]{border-top:3px solid #812b3a}.card[data-grade=SS],.card[data-grade=SSS]{border-top:3px solid var(--blue)}#adultPreview{margin-top:14px}#makeStatus{color:var(--blue);min-height:20px}

@@ -194,17 +194,17 @@ async function call(name, body) {
   return { ok: true, data };
 }
 
-export async function spawnFly() {
+export async function spawnFly(sex) {
   if (!(await ensureToken())) {
     const g = await ensureGuest();
     if (!g.ok) return g;
   }
-  const r = await call('spawn-fly');
+  const r = await call('spawn-fly', { sex });
   return r.ok ? { ok: true, fly: r.data } : r;
 }
 
-export async function breed(a, b, appendFrom) {
-  const r = await call('breed', { fly_a: a, fly_b: b, append_from: appendFrom || null });
+export async function breed(a, b, appendFrom, sex) {
+  const r = await call('breed', { fly_a: a, fly_b: b, append_from: appendFrom || null, sex });
   return r.ok ? { ok: true, fly: r.data } : r;
 }
 
@@ -246,6 +246,11 @@ function listingItems(row) {
     gene_d: row.gene_d,
     gene_p: row.gene_p,
     instar: row.instar || 1,
+    liveMs: row.live_ms || 0,
+    mates: row.mates || 0,
+    sex: row.sex || 'f',
+    source: row.source === 'specimen' ? 'specimen' : 'live',
+    image: row.image || null,
   }));
 }
 
@@ -272,8 +277,10 @@ export async function createListing(kind, flyIds, note, want, instar, color, gen
   }
   const me = tokenUser();
   if (!me) return { ok: false, error: '未登录' };
+  const g = genes || {};
+  const allowSpecimen = g.source === 'specimen';
   const ids = Array.isArray(flyIds) ? flyIds.filter(Boolean) : [];
-  if (!ids.length) return { ok: false, error: '参数不对' };
+  if (!ids.length && !allowSpecimen) return { ok: false, error: '参数不对' };
   const price = Math.floor(Number(want));
   if (!(price >= 1)) return { ok: false, error: '上架前要设置积分' };
   let res;
@@ -290,7 +297,6 @@ export async function createListing(kind, flyIds, note, want, instar, color, gen
       for (const x of row.fly_ids || []) taken.add(x);
     }
     if (ids.some((id) => taken.has(id))) return { ok: false, error: '已经上架过了' };
-    const g = genes || {};
     payload = {
       seller_id: me.id,
       seller_email: me.email,
@@ -307,6 +313,11 @@ export async function createListing(kind, flyIds, note, want, instar, color, gen
       geno: String(g.geno || ''),
       gene_d: g.gene_d == null ? null : Number(g.gene_d),
       gene_p: g.gene_p == null ? null : Number(g.gene_p),
+      live_ms: g.liveMs == null ? null : Math.max(0, Math.round(Number(g.liveMs) || 0)),
+      mates: g.mates == null ? null : Math.max(0, Math.floor(Number(g.mates) || 0)),
+      sex: g.sex == null ? null : (g.sex === 'm' ? 'm' : 'f'),
+      source: g.source === 'specimen' ? 'specimen' : 'live',
+      image: g.image == null ? null : String(g.image),
     };
     res = await fetchTimeout(`${URL}/rest/v1/listings`, {
       method: 'POST',
@@ -314,19 +325,23 @@ export async function createListing(kind, flyIds, note, want, instar, color, gen
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      const msg = String(err.message || err.error || '');
-      if (/codon|geno|gene_d|gene_p|schema cache|PGRST204|column/i.test(msg)) {
-        delete payload.codon;
-        delete payload.geno;
-        delete payload.gene_d;
-        delete payload.gene_p;
+      let err = await res.json().catch(() => ({}));
+      let msg = String(err.message || err.error || '');
+      // 列缺失：只删真正缺的那一列再重试，不误删已有基因列（避免上架丢密码子）
+      let colMatch = msg.match(/column\s+["']([^"']+)["']/i) || msg.match(/["']([^"']+)["']\s+column/i);
+      while (colMatch && payload[colMatch[1]] !== undefined) {
+        delete payload[colMatch[1]];
         res = await fetchTimeout(`${URL}/rest/v1/listings`, {
           method: 'POST',
           headers: authHeaders({ Prefer: 'return=representation' }),
           body: JSON.stringify(payload),
         });
-      } else if (/row-level security/i.test(msg)) {
+        if (res.ok) break;
+        err = await res.json().catch(() => ({}));
+        msg = String(err.message || err.error || '');
+        colMatch = msg.match(/column\s+["']([^"']+)["']/i) || msg.match(/["']([^"']+)["']\s+column/i);
+      }
+      if (!res.ok && /row-level security/i.test(msg)) {
         payload.seller_id = me.id;
         const g2 = await ensureGuest();
         if (g2 && g2.ok) {
@@ -340,7 +355,8 @@ export async function createListing(kind, flyIds, note, want, instar, color, gen
         } else {
           return { ok: false, error: msg || '上架失败' };
         }
-      } else {
+      }
+      if (!res.ok) {
         return { ok: false, error: msg || '上架失败' };
       }
     }
